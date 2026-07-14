@@ -12,7 +12,8 @@ Optimize for: implementation speed, demonstrability to freelance buyers, explici
 | Runtime packaging | Docker Compose | single n8n instance for MVP/demo |
 | Canonical application DB | PostgreSQL | managed PostgreSQL via Supabase project for demo |
 | n8n internal DB | PostgreSQL | separate database/schema boundary from application tables where practical |
-| AI API | OpenAI Responses API | strict Structured Outputs; model ID supplied by configuration and pinned after availability preflight |
+| AI API (development/demo) | Omni OpenAI-compatible endpoint | `https://omni.thefreelancer.web.id/v1`; use OpenAI-compatible transport in dev/demo |
+| AI API (production/client) | Provider-agnostic approved provider | OpenAI / Anthropic / other client-approved provider selected per engagement |
 | Internal alert | Telegram Bot API | one private operator chat for demo |
 | Prospect email | Resend API | transactional follow-up adapter |
 | Human review | n8n-hosted review form + opaque one-time review token | synthetic/demo environment only |
@@ -23,15 +24,24 @@ Optimize for: implementation speed, demonstrability to freelance buyers, explici
 ## Verified version fact
 The implementation baseline pins **n8n 2.30.4**, released 2026-07-13. Do not silently upgrade during the benchmark. Upgrades require regression testing and a release decision.
 
-## AI model selection rule
-Do **not** hard-code a model name in workflow logic. Set `OPENAI_MODEL` in environment/config and persist the actual model identifier returned/used with every analysis record.
+## AI provider policy
+The semantic-analysis contract is **provider-agnostic**. The transport contract is OpenAI-compatible, and Omni is the development/demo baseline because it is budget-friendly and exposes OpenAI-like endpoints.
 
-At implementation start, perform an API availability preflight and select the lowest-cost currently available OpenAI text model that:
+Do **not** hard-code a provider identity in workflow logic. Use configuration for environment selection:
+- `AI_PROVIDER=omni` for development/demo
+- `AI_PROVIDER=<approved-client-provider>` for client/prod deployments
+
+Persist the actual provider and model identifier used for each analysis record.
+
+At implementation start, perform an API availability preflight and select the lowest-cost currently available model on the configured provider that:
 1. supports the required Structured Outputs contract;
 2. passes the frozen semantic evaluation set;
 3. meets acceptable latency/cost observed in testing.
 
-This is intentionally a benchmark-driven model choice, not indecision. Model catalogs change faster than the product contract. The API/provider and output mechanism are fixed; the deploy-time model is a versioned configuration item.
+This is intentionally a benchmark-driven model choice, not indecision. Model catalogs change faster than the product contract. The provider/API and output mechanism are fixed; the deploy-time model is a versioned configuration item.
+
+## Why Omni for development/demo
+Selected for the personal development/demo environment because it reduces cost pressure while preserving an OpenAI-compatible API surface for the implementation contract. This keeps the workflow and schema design aligned with the eventual production provider abstraction.
 
 ## Why Supabase-managed PostgreSQL
 Selected for the demo because the project requires real PostgreSQL semantics—constraints, transactions, queryability, migrations—without adding database server administration to the July critical path. Supabase is used as managed PostgreSQL, not as a substitute for the domain model.
