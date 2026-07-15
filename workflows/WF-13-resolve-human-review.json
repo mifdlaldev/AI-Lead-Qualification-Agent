@@ -1,10 +1,679 @@
 {
-  "name": "WF-13 - resolve-human-review",
-  "nodes": [],
-  "connections": {},
+  "name": "WF-13 - Human Review Resolution",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "resolve-human-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b01-8001-200000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.review_token }}",
+        "encoding": "hex",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b02-8002-200000000002",
+      "name": "Hash Review Token",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_token_hash",
+              "value": "={{ $json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b03-8003-200000000003",
+      "name": "Save Token Hash",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT ri.id, ri.lead_id, ri.decision_id, ri.automated_recommendation, ri.review_reason_codes, ri.status, ri.review_token_expires_at, ri.created_at, ri.reviewer_identifier, ri.final_disposition, ri.resolution_note, (ri.id IS NULL) AS not_found, (ri.status = 'RESOLVED') AS already_resolved, (ri.review_token_expires_at < NOW()) AS is_expired FROM (SELECT 1) AS d LEFT JOIN review_items ri ON ri.review_token_hash = '{{ $json.review_token_hash }}'",
+        "additionalFields": {}
+      },
+      "id": "b1c2d3e4-f513-4b04-8004-200000000004",
+      "name": "Lookup Review Item",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.not_found }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "b1c2d3e4-f513-4b05-8005-200000000005",
+      "name": "Check Not Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{ $json.review_id }}"
+            },
+            {
+              "name": "status",
+              "value": "UNAUTHORIZED"
+            },
+            {
+              "name": "reason_code",
+              "value": "H-007"
+            },
+            {
+              "name": "error",
+              "value": "Invalid or unknown review token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b06-8006-200000000006",
+      "name": "Return H-007 Unauthorized",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1250, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b07-8007-200000000007",
+      "name": "Respond H-007",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1450, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.already_resolved }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "b1c2d3e4-f513-4b08-8008-200000000008",
+      "name": "Check Already Resolved",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "status",
+              "value": "ALREADY_RESOLVED"
+            },
+            {
+              "name": "reason_code",
+              "value": "H-006"
+            },
+            {
+              "name": "final_disposition",
+              "value": "={{ $json.final_disposition }}"
+            },
+            {
+              "name": "resolved_at",
+              "value": "={{ $json.resolved_at }}"
+            },
+            {
+              "name": "error",
+              "value": "Review item has already been resolved"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b09-8009-200000000009",
+      "name": "Return H-006 Already Resolved",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b0a-800a-20000000000a",
+      "name": "Respond H-006",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.is_expired }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "b1c2d3e4-f513-4b0b-800b-20000000000b",
+      "name": "Check Token Expired",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{ $json.id }}"
+            },
+            {
+              "name": "status",
+              "value": "EXPIRED"
+            },
+            {
+              "name": "reason_code",
+              "value": "H-005"
+            },
+            {
+              "name": "review_token_expires_at",
+              "value": "={{ $json.review_token_expires_at }}"
+            },
+            {
+              "name": "error",
+              "value": "Review token has expired"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b0c-800c-20000000000c",
+      "name": "Return H-005 Token Expired",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b0d-800d-20000000000d",
+      "name": "Respond H-005",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH updated AS (UPDATE review_items SET status = 'RESOLVED', final_disposition = '{{ $json.final_disposition }}', reviewer_identifier = '{{ $json.reviewer_identifier }}', resolution_note = '{{ $json.resolution_note }}', resolved_at = NOW() WHERE id = '{{ $json.id }}'::uuid AND status = 'OPEN' RETURNING id, automated_recommendation, final_disposition, lead_id, decision_id, review_reason_codes, resolved_at) SELECT COALESCE(u.id, '00000000-0000-0000-0000-000000000000'::uuid) AS id, u.automated_recommendation, u.final_disposition, u.lead_id, u.decision_id, u.review_reason_codes, u.resolved_at, (u.id IS NOT NULL) AS resolution_succeeded FROM (SELECT 1) AS d LEFT JOIN updated u ON true",
+        "additionalFields": {}
+      },
+      "id": "b1c2d3e4-f513-4b0e-800e-20000000000e",
+      "name": "Resolve Review Item",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1650, 500],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.resolution_succeeded }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "b1c2d3e4-f513-4b0f-800f-20000000000f",
+      "name": "Check Resolution Succeeded",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{ $('Lookup Review Item').item.json.id }}"
+            },
+            {
+              "name": "status",
+              "value": "ALREADY_RESOLVED"
+            },
+            {
+              "name": "reason_code",
+              "value": "H-006"
+            },
+            {
+              "name": "error",
+              "value": "Review item was already resolved by another process (race condition prevented double resolution)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b10-8010-200000000010",
+      "name": "Return H-006 Race Condition",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [2050, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b11-8011-200000000011",
+      "name": "Respond H-006 Race",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "reason_code",
+              "value": "={{ $json.final_disposition === 'QUALIFIED' ? 'H-002' : $json.final_disposition === 'NURTURE' ? 'H-003' : 'H-004' }}"
+            },
+            {
+              "name": "override_recorded",
+              "value": "={{ $json.final_disposition !== $json.automated_recommendation }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b12-8012-200000000012",
+      "name": "Compute Reason Code",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [2050, 550]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_disposition = '{{ $json.final_disposition }}', current_processing_state = 'ROUTING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'::uuid",
+        "additionalFields": {}
+      },
+      "id": "b1c2d3e4-f513-4b13-8013-200000000013",
+      "name": "Update Lead State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2250, 550],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $('Lookup Review Item').item.json.id }}', '{{ $json.lead_id }}'::uuid, 'AWAITING_HUMAN_REVIEW', 'ROUTING', 'STATE_TRANSITION', 'HUMAN', '{{ $json.reason_code }}', '{{ JSON.stringify({ review_id: $json.id, final_disposition: $json.final_disposition, reviewer_identifier: $json.reviewer_identifier, reviewer_role: $json.reviewer_role, resolution_note: $json.resolution_note, override_recorded: $json.override_recorded, automated_recommendation: $json.automated_recommendation }) }}'::jsonb, NOW())",
+        "additionalFields": {}
+      },
+      "id": "b1c2d3e4-f513-4b14-8014-200000000014",
+      "name": "Log Resolution Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2450, 550],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{ $('Lookup Review Item').item.json.id }}"
+            },
+            {
+              "name": "status",
+              "value": "RESOLVED"
+            },
+            {
+              "name": "reason_code",
+              "value": "={{ $json.reason_code }}"
+            },
+            {
+              "name": "final_disposition",
+              "value": "={{ $json.final_disposition }}"
+            },
+            {
+              "name": "previous_automated_recommendation",
+              "value": "={{ $json.automated_recommendation }}"
+            },
+            {
+              "name": "reviewer_identifier",
+              "value": "={{ $json.reviewer_identifier }}"
+            },
+            {
+              "name": "reviewer_role",
+              "value": "={{ $json.reviewer_role }}"
+            },
+            {
+              "name": "resolution_note",
+              "value": "={{ $json.resolution_note }}"
+            },
+            {
+              "name": "resolved_at",
+              "value": "={{ $json.resolved_at }}"
+            },
+            {
+              "name": "override_recorded",
+              "value": "={{ $json.override_recorded }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b15-8015-200000000015",
+      "name": "Prepare Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [2650, 550]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "b1c2d3e4-f513-4b16-8016-200000000016",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2850, 550]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Hash Review Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Review Token": {
+      "main": [
+        [
+          {
+            "node": "Save Token Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Token Hash": {
+      "main": [
+        [
+          {
+            "node": "Lookup Review Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Review Item": {
+      "main": [
+        [
+          {
+            "node": "Check Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Not Found": {
+      "main": [
+        [
+          {
+            "node": "Return H-007 Unauthorized",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Already Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return H-007 Unauthorized": {
+      "main": [
+        [
+          {
+            "node": "Respond H-007",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Already Resolved": {
+      "main": [
+        [
+          {
+            "node": "Return H-006 Already Resolved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Token Expired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return H-006 Already Resolved": {
+      "main": [
+        [
+          {
+            "node": "Respond H-006",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Token Expired": {
+      "main": [
+        [
+          {
+            "node": "Return H-005 Token Expired",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Review Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return H-005 Token Expired": {
+      "main": [
+        [
+          {
+            "node": "Respond H-005",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Review Item": {
+      "main": [
+        [
+          {
+            "node": "Check Resolution Succeeded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Resolution Succeeded": {
+      "main": [
+        [
+          {
+            "node": "Compute Reason Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return H-006 Race Condition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return H-006 Race Condition": {
+      "main": [
+        [
+          {
+            "node": "Respond H-006 Race",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Reason Code": {
+      "main": [
+        [
+          {
+            "node": "Update Lead State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead State": {
+      "main": [
+        [
+          {
+            "node": "Log Resolution Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Resolution Event": {
+      "main": [
+        [
+          {
+            "node": "Prepare Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Success Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

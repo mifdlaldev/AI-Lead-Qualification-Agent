@@ -1,10 +1,291 @@
 {
   "name": "WF-02 - lead-ingress-demo-form",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "form/submit",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true,
+          "responseData": "firstEntryJson"
+        }
+      },
+      "id": "d1e2f3a4-b5c6-4d7e-8f9a-0b1c2d3e4f5a",
+      "name": "Receive Form Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF-02: Form Ingress\n// Validates inbound-lead-v1 schema, generates IDs, builds fingerprint.\n// Normalizes form-encoded data into canonical shape.\n// Pure ingress - no qualification logic.\n\nconst crypto = require('crypto');\nconst input = $input.first().json;\n\n// --- Generate UUID v4 ---\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nconst correlationId = uuidv4();\nconst leadId = uuidv4();\n\n// --- Normalize form-encoded data: convert string booleans, trim whitespace ---\nconst consentRaw = input.consent_to_contact;\nconst consent = typeof consentRaw === 'boolean' ? consentRaw :\n                consentRaw === 'true' || consentRaw === '1' || consentRaw === 'on';\n\n// --- Validate required fields ---\nconst fullName = (input.full_name || '').trim();\nconst email = (input.email || '').trim().toLowerCase();\nconst projectDesc = (input.project_description || '').trim();\n\nconst missingRequired = !fullName || !email || !projectDesc;\nconst invalidEmail = email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\nconst missingConsent = consentRaw === undefined || consentRaw === null;\n\nconst isValid = !missingRequired && !invalidEmail && !missingConsent;\n\n// --- Build fingerprint: deterministic SHA-256 hash of key fields ---\nconst fingerprintSource = JSON.stringify({\n  full_name: fullName,\n  email: email,\n  project_description: projectDesc.substring(0, 200),\n  company_name: (input.company_name || '').trim(),\n  phone: (input.phone || '').trim()\n});\nconst fingerprint = crypto.createHash('sha256').update(fingerprintSource).digest('hex');\n\n// --- Timestamp ---\nconst receivedAt = new Date().toISOString();\nconst submissionId = input.submission_id || ('form_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10));\n\n// --- Build normalized payload for DB insert ---\nconst normalizedInput = {\n  full_name: fullName,\n  email: email,\n  project_description: projectDesc,\n  consent_to_contact: consent,\n  company_name: (input.company_name || '').trim(),\n  company_website: (input.company_website || '').trim(),\n  job_title: (input.job_title || '').trim(),\n  phone: (input.phone || '').trim(),\n  country: (input.country || '').trim(),\n  budget_range: (input.budget_range || 'NOT_PROVIDED').trim(),\n  desired_timeline: (input.desired_timeline || '').trim(),\n  service_interest: (input.service_interest || '').trim(),\n  lead_source: (input.lead_source || '').trim(),\n  utm_source: (input.utm_source || '').trim(),\n  utm_medium: (input.utm_medium || '').trim(),\n  utm_campaign: (input.utm_campaign || '').trim(),\n  utm_term: (input.utm_term || '').trim(),\n  utm_content: (input.utm_content || '').trim()\n};\n\nreturn {\n  correlation_id: correlationId,\n  lead_id: leadId,\n  submission_id: submissionId,\n  fingerprint: fingerprint,\n  received_at: receivedAt,\n  is_valid: isValid,\n  missing_required: missingRequired,\n  invalid_email: invalidEmail,\n  missing_consent: missingConsent,\n  ...normalizedInput\n};"
+      },
+      "id": "e2f3a4b5-c6d7-4e8f-9a0b-1c2d3e4f5a6b",
+      "name": "Validate & Generate IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_valid }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "f3a4b5c6-d7e8-4f9a-0b1c-2d3e4f5a6b7c",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads (id, source_system, source_submission_id, full_name, email, company_name, company_website, job_title, phone, country, project_description, budget_range, desired_timeline, service_interest, lead_source, consent_to_contact, payload_fingerprint, current_processing_state, current_disposition, policy_version, schema_version, received_at, updated_at, utm_source, utm_medium, utm_campaign, utm_term, utm_content) VALUES ('{{ $json.lead_id }}', 'demo_form', '{{ $json.submission_id }}', '{{ $json.full_name }}', '{{ $json.email }}', '{{ $json.company_name }}', '{{ $json.company_website }}', '{{ $json.job_title }}', '{{ $json.phone }}', '{{ $json.country }}', '{{ $json.project_description }}', '{{ $json.budget_range }}', '{{ $json.desired_timeline }}', '{{ $json.service_interest }}', '{{ $json.lead_source }}', '{{ $json.consent_to_contact }}'::boolean, '{{ $json.fingerprint }}', 'RECEIVED', 'NONE', 1, 1, '{{ $json.received_at }}', '{{ $json.received_at }}', '{{ $json.utm_source }}', '{{ $json.utm_medium }}', '{{ $json.utm_campaign }}', '{{ $json.utm_term }}', '{{ $json.utm_content }}')"
+      },
+      "id": "a4b5c6d7-e8f9-4a0b-1c2d-3e4f5a6b7c8d",
+      "name": "Insert Lead Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [850, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_runs (id, lead_id, correlation_id, attempt_number, workflow_version, started_at, final_status) VALUES (gen_random_uuid(), '{{ $json.lead_id }}', '{{ $json.correlation_id }}', 1, '1.0.0', '{{ $json.received_at }}', 'IN_PROGRESS')"
+      },
+      "id": "b5c6d7e8-f9a0-4b1c-2d3e-4f5a6b7c8d9e",
+      "name": "Create Processing Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1050, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', NULL, 'RECEIVED', 'STATE_TRANSITION', 'SYSTEM', 'INGRESS_FORM', jsonb_build_object('workflow', 'WF-02', 'source_system', 'demo_form', 'submission_id', '{{ $json.submission_id }}'), '{{ $json.received_at }}')"
+      },
+      "id": "c6d7e8f9-a0b1-4c2d-3e4f-5a6b7c8d9e0f",
+      "name": "Log Event RECEIVED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1250, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "correlation_id",
+              "value": "={{ $json.correlation_id }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $json.lead_id }}"
+            },
+            {
+              "name": "source_system",
+              "value": "demo_form"
+            },
+            {
+              "name": "received_at",
+              "value": "={{ $json.received_at }}"
+            },
+            {
+              "name": "status",
+              "value": "RECEIVED"
+            },
+            {
+              "name": "submission_id",
+              "value": "={{ $json.submission_id }}"
+            },
+            {
+              "name": "schema_version",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "include": "none"
+        }
+      },
+      "id": "d7e8f9a0-b1c2-4d3e-4f5a-6b7c8d9e0f1a",
+      "name": "Build Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1450, 150]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "error",
+              "value": "validation_failed"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.missing_required ? 'Missing required fields (full_name, email, project_description)' : $json.missing_consent ? 'Consent to contact is required' : 'Invalid email format' }}"
+            },
+            {
+              "name": "status",
+              "value": "INVALID"
+            }
+          ],
+          "number": [
+            {
+              "name": "http_status",
+              "value": 400
+            }
+          ]
+        },
+        "options": {
+          "include": "none"
+        }
+      },
+      "id": "e8f9a0b1-c2d3-4e4f-5a6b-7c8d9e0f1a2b",
+      "name": "Build Error Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [850, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "f9a0b1c2-d3e4-4f5a-6b7c-8d9e0f1a2b3c",
+      "name": "Return Form Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Receive Form Lead": {
+      "main": [
+        [
+          {
+            "node": "Validate & Generate IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Generate IDs": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Insert Lead Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Lead Record": {
+      "main": [
+        [
+          {
+            "node": "Create Processing Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Processing Run": {
+      "main": [
+        [
+          {
+            "node": "Log Event RECEIVED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event RECEIVED": {
+      "main": [
+        [
+          {
+            "node": "Build Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Success Response": {
+      "main": [
+        [
+          {
+            "node": "Return Form Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Response": {
+      "main": [
+        [
+          {
+            "node": "Return Form Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

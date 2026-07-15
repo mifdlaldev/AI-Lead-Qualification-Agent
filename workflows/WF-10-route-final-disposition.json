@@ -1,10 +1,918 @@
 {
   "name": "WF-10 - route-final-disposition",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf-10-route",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e10a0001-0000-4000-a000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT pr.id AS processing_run_id,\n       gen_random_uuid()::text || '-telegram' AS action_key_telegram,\n       gen_random_uuid()::text || '-email' AS action_key_email\nFROM processing_runs pr\nWHERE pr.correlation_id = '{{ $json.correlation_id }}'"
+      },
+      "id": "e10a0002-0000-4000-a000-000000000002",
+      "name": "Lookup Processing Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [500, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "lead_id",
+              "value": "={{ $('Webhook').item.json.lead_id }}"
+            },
+            {
+              "name": "correlation_id",
+              "value": "={{ $('Webhook').item.json.correlation_id }}"
+            },
+            {
+              "name": "disposition",
+              "value": "={{ $('Webhook').item.json.disposition }}"
+            },
+            {
+              "name": "consent_to_contact",
+              "value": "={{ $('Webhook').item.json.consent_to_contact }}"
+            },
+            {
+              "name": "requires_human_review",
+              "value": "={{ $('Webhook').item.json.requires_human_review }}"
+            },
+            {
+              "name": "decision_id",
+              "value": "={{ $('Webhook').item.json.decision_id }}"
+            },
+            {
+              "name": "processing_run_id",
+              "value": "={{ $json.processing_run_id }}"
+            },
+            {
+              "name": "action_key_telegram",
+              "value": "={{ $json.action_key_telegram }}"
+            },
+            {
+              "name": "action_key_email",
+              "value": "={{ $json.action_key_email }}"
+            },
+            {
+              "name": "full_name",
+              "value": "={{ $('Webhook').item.json.normalized_lead.full_name }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $('Webhook').item.json.normalized_lead.email }}"
+            },
+            {
+              "name": "company_name",
+              "value": "={{ $('Webhook').item.json.normalized_lead.company_name }}"
+            },
+            {
+              "name": "previous_state",
+              "value": "={{ $('Webhook').item.json.normalized_lead.current_processing_state || 'DECIDING' }}"
+            }
+          ],
+          "array": [
+            {
+              "name": "reason_codes",
+              "value": "={{ $('Webhook').item.json.reason_codes }}"
+            },
+            {
+              "name": "side_effects_triggered",
+              "value": "[]"
+            },
+            {
+              "name": "blocked_actions",
+              "value": "[]"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "routing_complete",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e10a0003-0000-4000-a000-000000000003",
+      "name": "Prep Routing Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.disposition }}",
+        "rules": [
+          {
+            "value": "QUALIFIED",
+            "output": 0
+          },
+          {
+            "value": "NURTURE",
+            "output": 1
+          },
+          {
+            "value": "DISQUALIFIED",
+            "output": 2
+          },
+          {
+            "value": "HUMAN_REVIEW",
+            "output": 3
+          }
+        ],
+        "fallbackOutput": 4
+      },
+      "id": "e10a0004-0000-4000-a000-000000000004",
+      "name": "Route by Disposition",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [1000, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET current_processing_state = 'ROUTING',\n    current_disposition = 'QUALIFIED',\n    updated_at = NOW()\nWHERE id = '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid\nRETURNING id, current_processing_state, current_disposition"
+      },
+      "id": "e10a0010-0000-4000-a000-000000000010",
+      "name": "Update Lead QUALIFIED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 100],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO side_effects (lead_id, processing_run_id, action_key, action_type, destination_class, status)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.processing_run_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.action_key_telegram }}',\n  'TELEGRAM_ALERT',\n  'INTERNAL',\n  'PENDING'\n)\nON CONFLICT (action_key) DO NOTHING\nRETURNING id, action_key, action_type, status"
+      },
+      "id": "e10a0011-0000-4000-a000-000000000011",
+      "name": "Create Telegram SE",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1500, 100],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO side_effects (lead_id, processing_run_id, action_key, action_type, destination_class, status)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.processing_run_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.action_key_email }}',\n  'PROSPECT_EMAIL',\n  'PROSPECT',\n  'PENDING'\n)\nON CONFLICT (action_key) DO NOTHING\nRETURNING id, action_key, action_type, status"
+      },
+      "id": "e10a0012-0000-4000-a000-000000000012",
+      "name": "Create Email SE",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1750, 100],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.correlation_id }}',\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  'DECIDING',\n  'ROUTING',\n  'STATE_TRANSITION',\n  'SYSTEM',\n  'ROUTING_QUALIFIED',\n  '{\"disposition\":\"QUALIFIED\",\"decision_id\":\"{{ $('Prep Routing Data').item.json.decision_id }}\"}'::jsonb\n)\nRETURNING id"
+      },
+      "id": "e10a0013-0000-4000-a000-000000000013",
+      "name": "Log QUALIFIED Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2000, 100],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "routing_complete",
+              "value": true
+            }
+          ],
+          "array": [
+            {
+              "name": "side_effects_triggered",
+              "value": "=[{\"action_key\": $('Prep Routing Data').item.json.action_key_telegram, \"action_type\": \"TELEGRAM_ALERT\", \"status\": \"PENDING\", \"reason_code\": \"S-001\"}, {\"action_key\": $('Prep Routing Data').item.json.action_key_email, \"action_type\": \"PROSPECT_EMAIL\", \"status\": \"PENDING\", \"reason_code\": \"S-003\"}]"
+            },
+            {
+              "name": "blocked_actions",
+              "value": "=[]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e10a0014-0000-4000-a000-000000000014",
+      "name": "QUALIFIED Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2250, 100]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ routing_complete: $json.routing_complete, side_effects_triggered: $json.side_effects_triggered, blocked_actions: $json.blocked_actions }) }}",
+        "options": {}
+      },
+      "id": "e10a0015-0000-4000-a000-000000000015",
+      "name": "Respond QUALIFIED",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2500, 100]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET current_processing_state = 'ROUTING',\n    current_disposition = 'NURTURE',\n    updated_at = NOW()\nWHERE id = '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid\nRETURNING id, current_processing_state, current_disposition"
+      },
+      "id": "e10a0020-0000-4000-a000-000000000020",
+      "name": "Update Lead NURTURE",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 400],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e10a0021-cond-0000-0000-000000000001",
+              "leftValue": "={{ $('Prep Routing Data').item.json.consent_to_contact }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e10a0021-0000-4000-a000-000000000021",
+      "name": "Check Consent NURTURE",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO side_effects (lead_id, processing_run_id, action_key, action_type, destination_class, status)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.processing_run_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.action_key_email }}',\n  'PROSPECT_EMAIL',\n  'PROSPECT',\n  'PENDING'\n)\nON CONFLICT (action_key) DO NOTHING\nRETURNING id, action_key, action_type, status"
+      },
+      "id": "e10a0022-0000-4000-a000-000000000022",
+      "name": "Create Email SE NURTURE",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1750, 350],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.correlation_id }}',\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  'DECIDING',\n  'ROUTING',\n  'STATE_TRANSITION',\n  'SYSTEM',\n  'ROUTING_NURTURE',\n  '{\"disposition\":\"NURTURE\",\"decision_id\":\"{{ $('Prep Routing Data').item.json.decision_id }}\"}'::jsonb\n)\nRETURNING id"
+      },
+      "id": "e10a0023-0000-4000-a000-000000000023",
+      "name": "Log NURTURE Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2000, 400],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "routing_complete",
+              "value": true
+            }
+          ],
+          "array": [
+            {
+              "name": "side_effects_triggered",
+              "value": "={{ $('Prep Routing Data').item.json.consent_to_contact ? [{\"action_key\": $('Prep Routing Data').item.json.action_key_email, \"action_type\": \"PROSPECT_EMAIL\", \"status\": \"PENDING\", \"reason_code\": \"S-003\"}] : [] }}"
+            },
+            {
+              "name": "blocked_actions",
+              "value": "={{ $('Prep Routing Data').item.json.consent_to_contact ? [] : [\"PROSPECT_EMAIL\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e10a0024-0000-4000-a000-000000000024",
+      "name": "NURTURE Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ routing_complete: $json.routing_complete, side_effects_triggered: $json.side_effects_triggered, blocked_actions: $json.blocked_actions }) }}",
+        "options": {}
+      },
+      "id": "e10a0025-0000-4000-a000-000000000025",
+      "name": "Respond NURTURE",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2500, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET current_processing_state = 'COMPLETED',\n    current_disposition = 'DISQUALIFIED',\n    updated_at = NOW()\nWHERE id = '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid\nRETURNING id, current_processing_state, current_disposition"
+      },
+      "id": "e10a0030-0000-4000-a000-000000000030",
+      "name": "Update Lead DISQUALIFIED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 700],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e10a0031-cond-0000-0000-000000000001",
+              "leftValue": "={{ $('Prep Routing Data').item.json.consent_to_contact }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e10a0031-0000-4000-a000-000000000031",
+      "name": "Check Consent DISQUALIFIED",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1500, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO side_effects (lead_id, processing_run_id, action_key, action_type, destination_class, status)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.processing_run_id }}'::uuid,\n  '{{ $('Prep Routing Data').item.json.action_key_email }}',\n  'PROSPECT_EMAIL',\n  'PROSPECT',\n  'PENDING'\n)\nON CONFLICT (action_key) DO NOTHING\nRETURNING id, action_key, action_type, status"
+      },
+      "id": "e10a0032-0000-4000-a000-000000000032",
+      "name": "Create Email SE DISQUALIFIED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1750, 650],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.correlation_id }}',\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  'DECIDING',\n  'COMPLETED',\n  'STATE_TRANSITION',\n  'SYSTEM',\n  'ROUTING_DISQUALIFIED',\n  '{\"disposition\":\"DISQUALIFIED\",\"decision_id\":\"{{ $('Prep Routing Data').item.json.decision_id }}\"}'::jsonb\n)\nRETURNING id"
+      },
+      "id": "e10a0033-0000-4000-a000-000000000033",
+      "name": "Log DISQUALIFIED Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2000, 700],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "routing_complete",
+              "value": true
+            }
+          ],
+          "array": [
+            {
+              "name": "side_effects_triggered",
+              "value": "={{ $('Prep Routing Data').item.json.consent_to_contact ? [{\"action_key\": $('Prep Routing Data').item.json.action_key_email, \"action_type\": \"PROSPECT_EMAIL\", \"status\": \"PENDING\", \"reason_code\": \"S-003\"}] : [] }}"
+            },
+            {
+              "name": "blocked_actions",
+              "value": "=[]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e10a0034-0000-4000-a000-000000000034",
+      "name": "DISQUALIFIED Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2250, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ routing_complete: $json.routing_complete, side_effects_triggered: $json.side_effects_triggered, blocked_actions: $json.blocked_actions }) }}",
+        "options": {}
+      },
+      "id": "e10a0035-0000-4000-a000-000000000035",
+      "name": "Respond DISQUALIFIED",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2500, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET current_processing_state = 'AWAITING_HUMAN_REVIEW',\n    current_disposition = 'HUMAN_REVIEW',\n    updated_at = NOW()\nWHERE id = '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid\nRETURNING id, current_processing_state, current_disposition"
+      },
+      "id": "e10a0040-0000-4000-a000-000000000040",
+      "name": "Update Lead HUMAN_REVIEW",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 1000],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.correlation_id }}',\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  'DECIDING',\n  'AWAITING_HUMAN_REVIEW',\n  'STATE_TRANSITION',\n  'SYSTEM',\n  'ROUTING_AWAITING_HUMAN_REVIEW',\n  '{\"disposition\":\"HUMAN_REVIEW\",\"decision_id\":\"{{ $('Prep Routing Data').item.json.decision_id }}\"}'::jsonb\n)\nRETURNING id"
+      },
+      "id": "e10a0041-0000-4000-a000-000000000041",
+      "name": "Log HUMAN_REVIEW Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1500, 1000],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "boolean": [
+            {
+              "name": "routing_complete",
+              "value": true
+            }
+          ],
+          "array": [
+            {
+              "name": "side_effects_triggered",
+              "value": "=[]"
+            },
+            {
+              "name": "blocked_actions",
+              "value": "=[\"TELEGRAM_ALERT\", \"PROSPECT_EMAIL\"]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e10a0042-0000-4000-a000-000000000042",
+      "name": "HUMAN_REVIEW Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1750, 1000]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ routing_complete: $json.routing_complete, side_effects_triggered: $json.side_effects_triggered, blocked_actions: $json.blocked_actions }) }}",
+        "options": {}
+      },
+      "id": "e10a0043-0000-4000-a000-000000000043",
+      "name": "Respond HUMAN_REVIEW",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2000, 1000]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "error",
+              "value": "UNKNOWN_DISPOSITION"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "routing_complete",
+              "value": false
+            }
+          ],
+          "array": [
+            {
+              "name": "side_effects_triggered",
+              "value": "=[]"
+            },
+            {
+              "name": "blocked_actions",
+              "value": "=[\"ALL\"]"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e10a0090-0000-4000-a000-000000000090",
+      "name": "Fallback Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1250, 1300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ routing_complete: $json.routing_complete, side_effects_triggered: $json.side_effects_triggered, blocked_actions: $json.blocked_actions, error: $json.error }) }}",
+        "options": {}
+      },
+      "id": "e10a0091-0000-4000-a000-000000000091",
+      "name": "Respond Fallback",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1500, 1300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Lookup Processing Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Processing Run": {
+      "main": [
+        [
+          {
+            "node": "Prep Routing Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Routing Data": {
+      "main": [
+        [
+          {
+            "node": "Route by Disposition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Disposition": {
+      "main": [
+        [
+          {
+            "node": "Update Lead QUALIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead NURTURE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead DISQUALIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Lead HUMAN_REVIEW",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead QUALIFIED": {
+      "main": [
+        [
+          {
+            "node": "Create Telegram SE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Telegram SE": {
+      "main": [
+        [
+          {
+            "node": "Create Email SE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Email SE": {
+      "main": [
+        [
+          {
+            "node": "Log QUALIFIED Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log QUALIFIED Event": {
+      "main": [
+        [
+          {
+            "node": "QUALIFIED Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QUALIFIED Output": {
+      "main": [
+        [
+          {
+            "node": "Respond QUALIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead NURTURE": {
+      "main": [
+        [
+          {
+            "node": "Check Consent NURTURE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Consent NURTURE": {
+      "main": [
+        [
+          {
+            "node": "Create Email SE NURTURE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log NURTURE Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Email SE NURTURE": {
+      "main": [
+        [
+          {
+            "node": "Log NURTURE Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log NURTURE Event": {
+      "main": [
+        [
+          {
+            "node": "NURTURE Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "NURTURE Output": {
+      "main": [
+        [
+          {
+            "node": "Respond NURTURE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead DISQUALIFIED": {
+      "main": [
+        [
+          {
+            "node": "Check Consent DISQUALIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Consent DISQUALIFIED": {
+      "main": [
+        [
+          {
+            "node": "Create Email SE DISQUALIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log DISQUALIFIED Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Email SE DISQUALIFIED": {
+      "main": [
+        [
+          {
+            "node": "Log DISQUALIFIED Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log DISQUALIFIED Event": {
+      "main": [
+        [
+          {
+            "node": "DISQUALIFIED Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DISQUALIFIED Output": {
+      "main": [
+        [
+          {
+            "node": "Respond DISQUALIFIED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead HUMAN_REVIEW": {
+      "main": [
+        [
+          {
+            "node": "Log HUMAN_REVIEW Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log HUMAN_REVIEW Event": {
+      "main": [
+        [
+          {
+            "node": "HUMAN_REVIEW Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HUMAN_REVIEW Output": {
+      "main": [
+        [
+          {
+            "node": "Respond HUMAN_REVIEW",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Output": {
+      "main": [
+        [
+          {
+            "node": "Respond Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

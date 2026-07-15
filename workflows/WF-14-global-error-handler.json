@@ -1,10 +1,549 @@
 {
-  "name": "WF-14 - global-error-handler",
-  "nodes": [],
-  "connections": {},
+  "name": "WF-14 - Global Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e0000001-4a14-4000-8000-000000000001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "error_type",
+              "value": "={{ $json.error_type || $json.error?.errorType || 'UNEXPECTED' }}"
+            },
+            {
+              "name": "correlation_id",
+              "value": "={{ $json.correlation_id || $json.error?.correlation_id || '' }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $json.lead_id || $json.error?.lead_id || null }}"
+            },
+            {
+              "name": "workflow_id",
+              "value": "={{ $json.context?.workflow_id || $json.workflow?.id || $json.error?.workflow_id || '' }}"
+            },
+            {
+              "name": "step",
+              "value": "={{ $json.context?.step || $json.error?.node || '' }}"
+            },
+            {
+              "name": "error_message",
+              "value": "={{ $json.context?.error_message || $json.error?.message || $json.error?.description || '' }}"
+            },
+            {
+              "name": "retry_count",
+              "value": "={{ $json.context?.retry_count || $json.error?.retryCount || 0 }}"
+            },
+            {
+              "name": "retry_eligible_input",
+              "value": "={{ $json.context?.retry_eligible !== undefined ? $json.context.retry_eligible : ($json.error?.retryable || false) }}"
+            },
+            {
+              "name": "previous_state",
+              "value": "={{ $json.processing_state || $json.error?.processingState || $json.error?.previousState || '' }}"
+            },
+            {
+              "name": "metadata",
+              "value": "={{ $json.metadata || $json.error?.metadata || {} }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e0000002-4a14-4000-8000-000000000002",
+      "name": "10 | Parse Error Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "max_retries",
+              "value": "3"
+            },
+            {
+              "name": "retryable_types",
+              "value": "AI_API,DB_CONNECTION,TIMEOUT,RATE_LIMIT"
+            },
+            {
+              "name": "is_retryable",
+              "value": "={{ ['AI_API','DB_CONNECTION','TIMEOUT','RATE_LIMIT'].includes($json.error_type) }}"
+            },
+            {
+              "name": "retry_count_num",
+              "value": "={{ parseInt($json.retry_count) || 0 }}"
+            },
+            {
+              "name": "retry_eligible",
+              "value": "={{ $json.is_retryable && (parseInt($json.retry_count) || 0) < 3 }}"
+            },
+            {
+              "name": "error_classification",
+              "value": "={{ $json.is_retryable ? 'TRANSIENT' : 'PERMANENT' }}"
+            },
+            {
+              "name": "sanitized_error_message",
+              "value": "={{ ($json.error_message || '').substring(0, 500) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e0000003-4a14-4000-8000-000000000003",
+      "name": "20 | Compute Retry Eligibility",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "cond-retry-eligible",
+              "leftValue": "={{ $json.retry_eligible }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e0000004-4a14-4000-8000-000000000004",
+      "name": "30 | Retry Eligible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "recovery_action",
+              "value": "RETRY"
+            },
+            {
+              "name": "new_state",
+              "value": "RETRY_PENDING"
+            },
+            {
+              "name": "reason_code",
+              "value": "E-003"
+            },
+            {
+              "name": "event_type",
+              "value": "ERROR_TRANSITION"
+            },
+            {
+              "name": "actor_type",
+              "value": "SYSTEM"
+            },
+            {
+              "name": "safe_metadata_json",
+              "value": "={{ JSON.stringify({ workflow_id: $json.workflow_id, step: $json.step, error_type: $json.error_type, error_classification: $json.error_classification, error_message: $json.sanitized_error_message, retry_count: $json.retry_count_num, max_retries: parseInt($json.max_retries) }) }}"
+            },
+            {
+              "name": "alert_sent",
+              "value": true
+            },
+            {
+              "name": "event_id",
+              "value": "={{ $json.event_id || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e0000005-4a14-4000-8000-000000000005",
+      "name": "40a | Prepare RETRY",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb) RETURNING id",
+        "additionalFields": {
+          "queryParams": "={{ $json.correlation_id }},{{ $json.lead_id || null }},{{ $json.previous_state }},{{ $json.new_state }},{{ $json.event_type }},{{ $json.actor_type }},{{ $json.reason_code }},{{ $json.safe_metadata_json }}"
+        }
+      },
+      "id": "e0000006-4a14-4000-8000-000000000006",
+      "name": "50a | Insert Processing Event (E-003)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 200],
+      "credentials": {
+        "postgres": "Postgres"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = $1, updated_at = NOW() WHERE id = $2::uuid",
+        "additionalFields": {
+          "queryParams": "={{ $json.new_state }},{{ $json.lead_id }}"
+        }
+      },
+      "id": "e0000007-4a14-4000-8000-000000000007",
+      "name": "60a | Update Lead to RETRY_PENDING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1450, 200],
+      "credentials": {
+        "postgres": "Postgres"
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "recovery_action",
+              "value": "RETRY"
+            },
+            {
+              "name": "event_id",
+              "value": "={{ $json.id || $('50a | Insert Processing Event (E-003)').first().json.id }}"
+            },
+            {
+              "name": "alert_sent",
+              "value": true
+            },
+            {
+              "name": "processing_state",
+              "value": "RETRY_PENDING"
+            },
+            {
+              "name": "reason_code",
+              "value": "E-003"
+            },
+            {
+              "name": "retry_count",
+              "value": "={{ $('40a | Prepare RETRY').first().json.retry_count_num }}"
+            },
+            {
+              "name": "correlation_id",
+              "value": "={{ $('10 | Parse Error Context').first().json.correlation_id }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $('10 | Parse Error Context').first().json.lead_id }}"
+            },
+            {
+              "name": "created_at",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e0000008-4a14-4000-8000-000000000008",
+      "name": "70a | RETRY Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1650, 200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "recovery_action",
+              "value": "FAIL_TERMINAL"
+            },
+            {
+              "name": "new_state",
+              "value": "FAILED"
+            },
+            {
+              "name": "reason_code",
+              "value": "={{ $json.retry_eligible === false && $json.retry_count_num >= 3 ? 'E-003' : 'E-001' }}"
+            },
+            {
+              "name": "event_type",
+              "value": "ERROR_TRANSITION"
+            },
+            {
+              "name": "actor_type",
+              "value": "SYSTEM"
+            },
+            {
+              "name": "failure_classification",
+              "value": "={{ $json.is_retryable ? 'RETRY_EXHAUSTED' : 'PERMANENT_FAILURE' }}"
+            },
+            {
+              "name": "safe_metadata_json",
+              "value": "={{ JSON.stringify({ workflow_id: $json.workflow_id, step: $json.step, error_type: $json.error_type, error_classification: $json.error_classification, error_message: $json.sanitized_error_message, retry_count: $json.retry_count_num, max_retries: parseInt($json.max_retries), failure_classification: $json.is_retryable ? 'RETRY_EXHAUSTED' : 'PERMANENT_FAILURE' }) }}"
+            },
+            {
+              "name": "alert_sent",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e0000009-4a14-4000-8000-000000000009",
+      "name": "40b | Prepare FAIL",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb) RETURNING id",
+        "additionalFields": {
+          "queryParams": "={{ $json.correlation_id }},{{ $json.lead_id || null }},{{ $json.previous_state }},{{ $json.new_state }},{{ $json.event_type }},{{ $json.actor_type }},{{ $json.reason_code }},{{ $json.safe_metadata_json }}"
+        }
+      },
+      "id": "e000000a-4a14-4000-8000-00000000000a",
+      "name": "50b | Insert Processing Event (E-001/E-003)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 500],
+      "credentials": {
+        "postgres": "Postgres"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = $1, updated_at = NOW() WHERE id = $2::uuid",
+        "additionalFields": {
+          "queryParams": "={{ $json.new_state }},{{ $json.lead_id }}"
+        }
+      },
+      "id": "e000000b-4a14-4000-8000-00000000000b",
+      "name": "60b | Update Lead to FAILED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1450, 450],
+      "credentials": {
+        "postgres": "Postgres"
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE processing_runs SET final_status = $1, failure_classification = $2, ended_at = NOW() WHERE correlation_id = $3",
+        "additionalFields": {
+          "queryParams": "={{ $json.new_state }},{{ $json.failure_classification }},{{ $json.correlation_id }}"
+        }
+      },
+      "id": "e000000c-4a14-4000-8000-00000000000c",
+      "name": "70b | Update Processing Run to FAILED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1650, 500],
+      "credentials": {
+        "postgres": "Postgres"
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "recovery_action",
+              "value": "FAIL_TERMINAL"
+            },
+            {
+              "name": "event_id",
+              "value": "={{ $json.id || $('50b | Insert Processing Event (E-001/E-003)').first().json.id }}"
+            },
+            {
+              "name": "alert_sent",
+              "value": true
+            },
+            {
+              "name": "processing_state",
+              "value": "FAILED"
+            },
+            {
+              "name": "reason_code",
+              "value": "={{ $('40b | Prepare FAIL').first().json.reason_code }}"
+            },
+            {
+              "name": "failure_classification",
+              "value": "={{ $('40b | Prepare FAIL').first().json.failure_classification }}"
+            },
+            {
+              "name": "correlation_id",
+              "value": "={{ $('10 | Parse Error Context').first().json.correlation_id }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $('10 | Parse Error Context').first().json.lead_id }}"
+            },
+            {
+              "name": "created_at",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e000000d-4a14-4000-8000-00000000000d",
+      "name": "80b | FAIL Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1850, 500]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "10 | Parse Error Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 | Parse Error Context": {
+      "main": [
+        [
+          {
+            "node": "20 | Compute Retry Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 | Compute Retry Eligibility": {
+      "main": [
+        [
+          {
+            "node": "30 | Retry Eligible?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "30 | Retry Eligible?": {
+      "main": [
+        [
+          {
+            "node": "40a | Prepare RETRY",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "40b | Prepare FAIL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "40a | Prepare RETRY": {
+      "main": [
+        [
+          {
+            "node": "50a | Insert Processing Event (E-003)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "50a | Insert Processing Event (E-003)": {
+      "main": [
+        [
+          {
+            "node": "60a | Update Lead to RETRY_PENDING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "60a | Update Lead to RETRY_PENDING": {
+      "main": [
+        [
+          {
+            "node": "70a | RETRY Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "40b | Prepare FAIL": {
+      "main": [
+        [
+          {
+            "node": "50b | Insert Processing Event (E-001/E-003)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "50b | Insert Processing Event (E-001/E-003)": {
+      "main": [
+        [
+          {
+            "node": "60b | Update Lead to FAILED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "60b | Update Lead to FAILED": {
+      "main": [
+        [
+          {
+            "node": "70b | Update Processing Run to FAILED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "70b | Update Processing Run to FAILED": {
+      "main": [
+        [
+          {
+            "node": "80b | FAIL Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

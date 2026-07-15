@@ -1,10 +1,1134 @@
 {
   "name": "WF-03 - lead-orchestrator",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "orchestrate",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "01a2b3c4-d5e6-4701-8001-010101010101",
+      "name": "Receive Orchestration Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'VALIDATING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}' AND current_processing_state = 'RECEIVED'"
+      },
+      "id": "02a2b3c4-d5e6-4702-8002-020202020202",
+      "name": "Set State VALIDATING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'RECEIVED', 'VALIDATING', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_001', jsonb_build_object('workflow', 'WF-03', 'step', 'validation_start'), NOW())"
+      },
+      "id": "03a2b3c4-d5e6-4703-8003-030303030303",
+      "name": "Log RECEIVED→VALIDATING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-04",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "full_name", "value": "={{ $json.full_name }}" },
+                { "name": "email", "value": "={{ $json.email }}" },
+                { "name": "project_description", "value": "={{ $json.project_description }}" },
+                { "name": "company_name", "value": "={{ $json.company_name || '' }}" },
+                { "name": "company_website", "value": "={{ $json.company_website || '' }}" },
+                { "name": "job_title", "value": "={{ $json.job_title || '' }}" },
+                { "name": "phone", "value": "={{ $json.phone || '' }}" },
+                { "name": "country", "value": "={{ $json.country || '' }}" },
+                { "name": "budget_range", "value": "={{ $json.budget_range || '' }}" },
+                { "name": "desired_timeline", "value": "={{ $json.desired_timeline || '' }}" },
+                { "name": "service_interest", "value": "={{ $json.service_interest || '' }}" },
+                { "name": "lead_source", "value": "={{ $json.lead_source || '' }}" },
+                { "name": "utm_source", "value": "={{ $json.utm_source || '' }}" },
+                { "name": "utm_medium", "value": "={{ $json.utm_medium || '' }}" },
+                { "name": "utm_campaign", "value": "={{ $json.utm_campaign || '' }}" },
+                { "name": "utm_term", "value": "={{ $json.utm_term || '' }}" },
+                { "name": "utm_content", "value": "={{ $json.utm_content || '' }}" }
+              ],
+              "boolean": [
+                { "name": "consent_to_contact", "value": "={{ $json.consent_to_contact }}" }
+              ]
+            }
+          }
+        }
+      },
+      "id": "04a2b3c4-d5e6-4704-8004-040404040404",
+      "name": "Execute WF-04 Validation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_valid }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "05a2b3c4-d5e6-4705-8005-050505050505",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'INVALID', current_disposition = 'NONE', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "06a2b3c4-d5e6-4706-8006-060606060606",
+      "name": "Set State INVALID",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1250, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'VALIDATING', 'INVALID', 'STATE_TRANSITION', 'SYSTEM', '{{ $json.reason_codes[0] || \"V-001\" }}', jsonb_build_object('workflow', 'WF-03', 'reason_codes', '{{ JSON.stringify($json.reason_codes || []) }}', 'recoverability', '{{ $json.recoverability }}'), NOW())"
+      },
+      "id": "07a2b3c4-d5e6-4707-8007-070707070707",
+      "name": "Log VALIDATING→INVALID",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1450, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "current_processing_state", "value": "INVALID" },
+            { "name": "current_disposition", "value": "NONE" },
+            { "name": "reason_codes", "value": "={{ JSON.stringify($json.reason_codes || []) }}" }
+          ],
+          "boolean": [
+            { "name": "is_valid", "value": false }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "08a2b3c4-d5e6-4708-8008-080808080808",
+      "name": "Build Invalid Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1650, 600]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-05",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "source_system", "value": "={{ $json.source_system || '' }}" },
+                { "name": "source_submission_id", "value": "={{ $json.submission_id || '' }}" },
+                { "name": "payload_fingerprint", "value": "={{ $json.fingerprint || '' }}" }
+              ]
+            }
+          }
+        }
+      },
+      "id": "09a2b3c4-d5e6-4709-8009-090909090909",
+      "name": "Execute WF-05 Idempotency",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_duplicate }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "10a2b3c4-d5e6-4710-8010-101010101010",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'DUPLICATE', current_disposition = 'NONE', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "11a2b3c4-d5e6-4711-8011-111111111111",
+      "name": "Set State DUPLICATE",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1650, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DEDUPLICATING', 'DUPLICATE', 'STATE_TRANSITION', 'SYSTEM', '{{ $json.reason_code }}', jsonb_build_object('workflow', 'WF-03', 'action', '{{ $json.action }}', 'existing_lead_id', '{{ $json.existing_lead_id || \"\" }}'), NOW())"
+      },
+      "id": "12a2b3c4-d5e6-4712-8012-121212121212",
+      "name": "Log DEDUPLICATING→DUPLICATE",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1850, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "current_processing_state", "value": "DUPLICATE" },
+            { "name": "current_disposition", "value": "NONE" },
+            { "name": "reason_codes", "value": "={{ JSON.stringify([$json.reason_code]) }}" }
+          ],
+          "boolean": [
+            { "name": "is_duplicate", "value": true }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "13a2b3c4-d5e6-4713-8013-131313131313",
+      "name": "Build Duplicate Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2050, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DEDUPLICATING', 'PREQUALIFYING', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_002', jsonb_build_object('workflow', 'WF-03', 'step', 'prequalification_start'), NOW())"
+      },
+      "id": "14a2b3c4-d5e6-4714-8014-141414141414",
+      "name": "Log DEDUPLICATING→PREQUALIFYING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1650, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'PREQUALIFYING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "15a2b3c4-d5e6-4715-8015-151515151515",
+      "name": "Set State PREQUALIFYING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1850, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-06",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "full_name", "value": "={{ $json.full_name || $json.normalized_lead.full_name || '' }}" },
+                { "name": "email", "value": "={{ $json.email || $json.normalized_lead.email || '' }}" },
+                { "name": "project_description", "value": "={{ $json.project_description || $json.normalized_lead.project_description || '' }}" },
+                { "name": "consent_to_contact", "value": "={{ $json.consent_to_contact || $json.normalized_lead.consent_to_contact || false }}" },
+                { "name": "budget_range", "value": "={{ $json.budget_range || $json.normalized_lead.budget_range || '' }}" },
+                { "name": "service_interest", "value": "={{ $json.service_interest || $json.normalized_lead.service_interest || '' }}" },
+                { "name": "company_name", "value": "={{ $json.company_name || $json.normalized_lead.company_name || '' }}" },
+                { "name": "country", "value": "={{ $json.country || $json.normalized_lead.country || '' }}" }
+              ]
+            }
+          }
+        }
+      },
+      "id": "16a2b3c4-d5e6-4716-8016-161616161616",
+      "name": "Execute WF-06 Prequalification",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.passed }}",
+              "operation": "equals",
+              "value2": false
+            },
+            {
+              "value1": "={{ $json.requires_ai_analysis }}",
+              "operation": "equals",
+              "value2": false
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "17a2b3c4-d5e6-4717-8017-171717171717",
+      "name": "Terminal Disqualified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "prequalification_passed", "value": "false" },
+            { "name": "prequalification_reason_codes", "value": "={{ JSON.stringify($json.reason_codes || []) }}" },
+            { "name": "disposition_if_terminal", "value": "={{ $json.disposition_if_terminal || 'DISQUALIFIED' }}" },
+            { "name": "policy_version", "value": "1" }
+          ],
+          "boolean": [
+            { "name": "requires_ai_analysis", "value": false }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "18a2b3c4-d5e6-4718-8018-181818181818",
+      "name": "Prepare Prequal-Only Decision Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [2450, 600]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-08",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "prequalification_result", "value": "={{ JSON.stringify({ passed: false, reason_codes: $json.prequalification_reason_codes, requires_ai_analysis: false, disposition_if_terminal: $json.disposition_if_terminal }) }}" },
+                { "name": "policy_version", "value": "={{ $json.policy_version }}" }
+              ]
+            }
+          }
+        }
+      },
+      "id": "19a2b3c4-d5e6-4719-8019-191919191919",
+      "name": "Execute WF-08 Decision (Prequal Only)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2650, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'PREQUALIFYING', 'ANALYZING', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_003', jsonb_build_object('workflow', 'WF-03', 'step', 'ai_analysis_start'), NOW())"
+      },
+      "id": "20a2b3c4-d5e6-4720-8020-202020202020",
+      "name": "Log PREQUALIFYING→ANALYZING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [2450, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'ANALYZING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "21a2b3c4-d5e6-4721-8021-212121212121",
+      "name": "Set State ANALYZING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [2650, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-07",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "full_name", "value": "={{ $json.full_name || $json.normalized_lead.full_name || '' }}" },
+                { "name": "project_description", "value": "={{ $json.project_description || $json.normalized_lead.project_description || '' }}" },
+                { "name": "company_name", "value": "={{ $json.company_name || $json.normalized_lead.company_name || '' }}" },
+                { "name": "job_title", "value": "={{ $json.job_title || $json.normalized_lead.job_title || '' }}" },
+                { "name": "budget_range", "value": "={{ $json.budget_range || $json.normalized_lead.budget_range || '' }}" },
+                { "name": "desired_timeline", "value": "={{ $json.desired_timeline || $json.normalized_lead.desired_timeline || '' }}" },
+                { "name": "service_interest", "value": "={{ $json.service_interest || $json.normalized_lead.service_interest || '' }}" },
+                { "name": "country", "value": "={{ $json.country || $json.normalized_lead.country || '' }}" }
+              ],
+              "number": [
+                { "name": "prompt_version", "value": 1 },
+                { "name": "analysis_schema_version", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      "id": "22a2b3c4-d5e6-4722-8022-222222222222",
+      "name": "Execute WF-07 AI Analysis",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [2850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.validation_status }}",
+              "operation": "equals",
+              "value2": "FAILED"
+            }
+          ]
+        }
+      },
+      "id": "23a2b3c4-d5e6-4723-8023-232323232323",
+      "name": "AI Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'FAILED', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "24a2b3c4-d5e6-4724-8024-242424242424",
+      "name": "Set State FAILED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3250, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'ANALYZING', 'FAILED', 'STATE_TRANSITION', 'SYSTEM', '{{ $json.reason_code || \"A-005\" }}', jsonb_build_object('workflow', 'WF-03', 'validation_status', '{{ $json.validation_status }}', 'model_provider', '{{ $json.model_provider || \"\" }}'), NOW())"
+      },
+      "id": "25a2b3c4-d5e6-4725-8025-252525252525",
+      "name": "Log ANALYZING→FAILED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3450, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "current_processing_state", "value": "FAILED" },
+            { "name": "current_disposition", "value": "NONE" },
+            { "name": "reason_codes", "value": "={{ JSON.stringify([$json.reason_code || 'A-005']) }}" }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "26a2b3c4-d5e6-4726-8026-262626262626",
+      "name": "Build Failed Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [3650, 600]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "prequalification_result", "value": "={{ JSON.stringify({ passed: $json.passed || $json.prequalification_passed || true, reason_codes: $json.reason_codes || $json.prequalification_reason_codes || [], requires_ai_analysis: $json.requires_ai_analysis !== undefined ? $json.requires_ai_analysis : true }) }}" },
+            { "name": "ai_analysis_result", "value": "={{ JSON.stringify($json.analysis_result || {}) }}" },
+            { "name": "policy_version", "value": "1" },
+            { "name": "full_name", "value": "={{ $json.full_name || $json.normalized_lead.full_name || '' }}" },
+            { "name": "email", "value": "={{ $json.email || $json.normalized_lead.email || '' }}" },
+            { "name": "consent_to_contact", "value": "={{ $json.consent_to_contact || $json.normalized_lead.consent_to_contact || false }}" }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "27a2b3c4-d5e6-4727-8027-272727272727",
+      "name": "Prepare Full Decision Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [3250, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-08",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "prequalification_result", "value": "={{ $json.prequalification_result }}" },
+                { "name": "ai_analysis_result", "value": "={{ $json.ai_analysis_result }}" },
+                { "name": "policy_version", "value": "={{ $json.policy_version }}" },
+                { "name": "full_name", "value": "={{ $json.full_name }}" },
+                { "name": "email", "value": "={{ $json.email }}" },
+                { "name": "consent_to_contact", "value": "={{ $json.consent_to_contact }}" }
+              ]
+            }
+          }
+        }
+      },
+      "id": "28a2b3c4-d5e6-4728-8028-282828282828",
+      "name": "Execute WF-08 Decision",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [3450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'ANALYZING', 'DECIDING', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_004', jsonb_build_object('workflow', 'WF-03', 'step', 'decision_start'), NOW())"
+      },
+      "id": "29a2b3c4-d5e6-4729-8029-292929292929",
+      "name": "Log ANALYZING→DECIDING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3050, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'DECIDING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "30a2b3c4-d5e6-4730-8030-303030303030",
+      "name": "Set State DECIDING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3250, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.requires_human_review }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "31a2b3c4-d5e6-4731-8031-313131313131",
+      "name": "Human Review Required?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DECIDING', 'AWAITING_HUMAN_REVIEW', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_005', jsonb_build_object('workflow', 'WF-03', 'disposition', '{{ $json.disposition }}', 'confidence', '{{ $json.confidence }}'), NOW())"
+      },
+      "id": "32a2b3c4-d5e6-4732-8032-323232323232",
+      "name": "Log DECIDING→AWAITING_HUMAN_REVIEW",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3850, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'AWAITING_HUMAN_REVIEW', current_disposition = 'HUMAN_REVIEW', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "33a2b3c4-d5e6-4733-8033-333333333333",
+      "name": "Set State AWAITING_HUMAN_REVIEW",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4050, 600],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-09",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "decision_id", "value": "={{ $json.decision_id }}" },
+                { "name": "automated_recommendation", "value": "={{ $json.disposition }}" },
+                { "name": "review_reason_codes", "value": "={{ JSON.stringify($json.reason_codes || []) }}" }
+              ],
+              "number": [
+                { "name": "token_ttl_hours", "value": 72 }
+              ]
+            }
+          }
+        }
+      },
+      "id": "34a2b3c4-d5e6-4734-8034-343434343434",
+      "name": "Execute WF-09 Review Creation",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [4250, 600]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "current_processing_state", "value": "AWAITING_HUMAN_REVIEW" },
+            { "name": "current_disposition", "value": "HUMAN_REVIEW" },
+            { "name": "reason_codes", "value": "={{ JSON.stringify($json.reason_codes || []) }}" },
+            { "name": "decision_id", "value": "={{ $json.decision_id }}" },
+            { "name": "review_id", "value": "={{ $json.review_id }}" }
+          ],
+          "boolean": [
+            { "name": "requires_human_review", "value": true }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "35a2b3c4-d5e6-4735-8035-353535353535",
+      "name": "Build Review Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [4450, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DECIDING', 'ROUTING', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_006', jsonb_build_object('workflow', 'WF-03', 'step', 'routing_start'), NOW())"
+      },
+      "id": "36a2b3c4-d5e6-4736-8036-363636363636",
+      "name": "Log DECIDING→ROUTING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3850, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'ROUTING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "37a2b3c4-d5e6-4737-8037-373737373737",
+      "name": "Set State ROUTING",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4050, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "WF-10",
+          "mode": "list"
+        },
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+                { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+                { "name": "disposition", "value": "={{ $json.disposition }}" },
+                { "name": "reason_codes", "value": "={{ JSON.stringify($json.reason_codes || []) }}" },
+                { "name": "consent_to_contact", "value": "={{ $json.consent_to_contact || $json.normalized_lead.consent_to_contact || false }}" },
+                { "name": "decision_id", "value": "={{ $json.decision_id }}" },
+                { "name": "full_name", "value": "={{ $json.full_name || $json.normalized_lead.full_name || '' }}" },
+                { "name": "email", "value": "={{ $json.email || $json.normalized_lead.email || '' }}" }
+              ]
+            }
+          }
+        }
+      },
+      "id": "38a2b3c4-d5e6-4738-8038-383838383838",
+      "name": "Execute WF-10 Routing",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [4250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'ROUTING', 'COMPLETED', 'STATE_TRANSITION', 'SYSTEM', 'ORCH_007', jsonb_build_object('workflow', 'WF-03', 'routing_complete', '{{ $json.routing_complete }}'), NOW())"
+      },
+      "id": "39a2b3c4-d5e6-4739-8039-393939393939",
+      "name": "Log ROUTING→COMPLETED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4450, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'COMPLETED', current_disposition = '{{ $json.disposition }}', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "40a2b3c4-d5e6-4740-8040-404040404040",
+      "name": "Set State COMPLETED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4650, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE processing_runs SET ended_at = NOW(), final_status = 'COMPLETED' WHERE correlation_id = '{{ $json.correlation_id }}' AND final_status = 'IN_PROGRESS'"
+      },
+      "id": "41a2b3c4-d5e6-4741-8041-414141414141",
+      "name": "Close Processing Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4850, 300],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "lead_id", "value": "={{ $json.lead_id }}" },
+            { "name": "correlation_id", "value": "={{ $json.correlation_id }}" },
+            { "name": "current_processing_state", "value": "COMPLETED" },
+            { "name": "current_disposition", "value": "={{ $json.disposition }}" },
+            { "name": "reason_codes", "value": "={{ JSON.stringify($json.reason_codes || []) }}" },
+            { "name": "decision_id", "value": "={{ $json.decision_id }}" },
+            { "name": "evidence", "value": "={{ JSON.stringify($json.evidence_references || []) }}" },
+            { "name": "completed_at", "value": "={{ $json.completed_at || $now }}" }
+          ],
+          "boolean": [
+            { "name": "requires_human_review", "value": false }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "42a2b3c4-d5e6-4742-8042-424242424242",
+      "name": "Build Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [5050, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "43a2b3c4-d5e6-4743-8043-434343434343",
+      "name": "Return Orchestration Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [5250, 300]
+    }
+  ],
+  "connections": {
+    "Receive Orchestration Request": {
+      "main": [
+        [{ "node": "Set State VALIDATING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State VALIDATING": {
+      "main": [
+        [{ "node": "Log RECEIVED→VALIDATING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log RECEIVED→VALIDATING": {
+      "main": [
+        [{ "node": "Execute WF-04 Validation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-04 Validation": {
+      "main": [
+        [{ "node": "Is Valid?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [{ "node": "Execute WF-05 Idempotency", "type": "main", "index": 0 }],
+        [{ "node": "Set State INVALID", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State INVALID": {
+      "main": [
+        [{ "node": "Log VALIDATING→INVALID", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log VALIDATING→INVALID": {
+      "main": [
+        [{ "node": "Build Invalid Output", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Invalid Output": {
+      "main": [
+        [{ "node": "Return Orchestration Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-05 Idempotency": {
+      "main": [
+        [{ "node": "Is Duplicate?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [{ "node": "Log DEDUPLICATING→PREQUALIFYING", "type": "main", "index": 0 }],
+        [{ "node": "Set State DUPLICATE", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State DUPLICATE": {
+      "main": [
+        [{ "node": "Log DEDUPLICATING→DUPLICATE", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log DEDUPLICATING→DUPLICATE": {
+      "main": [
+        [{ "node": "Build Duplicate Output", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Duplicate Output": {
+      "main": [
+        [{ "node": "Return Orchestration Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log DEDUPLICATING→PREQUALIFYING": {
+      "main": [
+        [{ "node": "Set State PREQUALIFYING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State PREQUALIFYING": {
+      "main": [
+        [{ "node": "Execute WF-06 Prequalification", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-06 Prequalification": {
+      "main": [
+        [{ "node": "Terminal Disqualified?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Terminal Disqualified?": {
+      "main": [
+        [{ "node": "Log PREQUALIFYING→ANALYZING", "type": "main", "index": 0 }],
+        [{ "node": "Prepare Prequal-Only Decision Input", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Prequal-Only Decision Input": {
+      "main": [
+        [{ "node": "Execute WF-08 Decision (Prequal Only)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-08 Decision (Prequal Only)": {
+      "main": [
+        [{ "node": "Human Review Required?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log PREQUALIFYING→ANALYZING": {
+      "main": [
+        [{ "node": "Set State ANALYZING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State ANALYZING": {
+      "main": [
+        [{ "node": "Execute WF-07 AI Analysis", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-07 AI Analysis": {
+      "main": [
+        [{ "node": "AI Failed?", "type": "main", "index": 0 }]
+      ]
+    },
+    "AI Failed?": {
+      "main": [
+        [{ "node": "Prepare Full Decision Input", "type": "main", "index": 0 }],
+        [{ "node": "Set State FAILED", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State FAILED": {
+      "main": [
+        [{ "node": "Log ANALYZING→FAILED", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log ANALYZING→FAILED": {
+      "main": [
+        [{ "node": "Build Failed Output", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Failed Output": {
+      "main": [
+        [{ "node": "Return Orchestration Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Prepare Full Decision Input": {
+      "main": [
+        [{ "node": "Log ANALYZING→DECIDING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log ANALYZING→DECIDING": {
+      "main": [
+        [{ "node": "Set State DECIDING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State DECIDING": {
+      "main": [
+        [{ "node": "Execute WF-08 Decision", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-08 Decision": {
+      "main": [
+        [{ "node": "Human Review Required?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Human Review Required?": {
+      "main": [
+        [{ "node": "Log DECIDING→ROUTING", "type": "main", "index": 0 }],
+        [{ "node": "Log DECIDING→AWAITING_HUMAN_REVIEW", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log DECIDING→AWAITING_HUMAN_REVIEW": {
+      "main": [
+        [{ "node": "Set State AWAITING_HUMAN_REVIEW", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State AWAITING_HUMAN_REVIEW": {
+      "main": [
+        [{ "node": "Execute WF-09 Review Creation", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-09 Review Creation": {
+      "main": [
+        [{ "node": "Build Review Output", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Review Output": {
+      "main": [
+        [{ "node": "Return Orchestration Result", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log DECIDING→ROUTING": {
+      "main": [
+        [{ "node": "Set State ROUTING", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State ROUTING": {
+      "main": [
+        [{ "node": "Execute WF-10 Routing", "type": "main", "index": 0 }]
+      ]
+    },
+    "Execute WF-10 Routing": {
+      "main": [
+        [{ "node": "Log ROUTING→COMPLETED", "type": "main", "index": 0 }]
+      ]
+    },
+    "Log ROUTING→COMPLETED": {
+      "main": [
+        [{ "node": "Set State COMPLETED", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State COMPLETED": {
+      "main": [
+        [{ "node": "Close Processing Run", "type": "main", "index": 0 }]
+      ]
+    },
+    "Close Processing Run": {
+      "main": [
+        [{ "node": "Build Final Output", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Final Output": {
+      "main": [
+        [{ "node": "Return Orchestration Result", "type": "main", "index": 0 }]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

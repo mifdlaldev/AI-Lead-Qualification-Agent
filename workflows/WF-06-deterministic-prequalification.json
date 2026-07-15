@@ -1,10 +1,246 @@
 {
   "name": "WF-06 - deterministic-prequalification",
-  "nodes": [],
-  "connections": {},
-  "settings": {
-    "callerPolicy": "workflowsFromSameOwner"
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deterministic-prequalification",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "id": "23836f9c-4c5d-478a-a357-0f5a3292e154",
+      "name": "Receive for Prequalification",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.is_valid }}", "operation": "equals", "value2": true }
+          ]
+        }
+      },
+      "id": "668f7581-1890-4287-ac12-aa0128f75c6f",
+      "name": "Is Lead Valid?",
+      "type": "n8n-nodes-base.if",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'PREQUALIFYING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "773924ad-9129-4e7f-83e5-a5067fdb1693",
+      "name": "Ensure State PREQUALIFYING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [650, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DEDUPLICATING', 'PREQUALIFYING', 'STATE_TRANSITION', 'SYSTEM', 'P-000', jsonb_build_object('workflow', 'WF-06', 'stage', 'prequalification_start'), NOW())"
+      },
+      "id": "d9dfd328-1d09-4153-9d40-026eafe45b2a",
+      "name": "Log Event DEDUPLICATING→PREQUALIFYING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [850, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT policy_value->'services' AS excluded_services FROM policy_config WHERE policy_key = 'excluded_services' AND active = true AND policy_version = {{ $json.policy_version }} LIMIT 1"
+      },
+      "id": "76efb63c-712e-4b78-8e2f-5c2715d3db3f",
+      "name": "Load Excluded Services Policy",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1050, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF-06: Deterministic Prequalification\n// Evaluates hard rules: consent, excluded services, contactability.\n// Produces reason codes P-001 to P-005.\n\nconst input = $input.first().json;\nconst lead = input.normalized_lead || {};\n\n// --- Reason codes accumulator ---\nconst reasonCodes = [];\nconst blockedActions = [];\nlet passed = true;\nlet dispositionIfTerminal = 'NONE';\nlet requiresAiAnalysis = false;\n\n// --- HR-002: Consent check ---\nconst consentToContact = lead.consent_to_contact;\nif (consentToContact === undefined || consentToContact === null) {\n  reasonCodes.push('P-001');\n  blockedActions.push('AUTOMATED_FOLLOWUP', 'PROSPECT_EMAIL');\n  passed = false;\n  dispositionIfTerminal = 'DISQUALIFIED';\n} else if (consentToContact === false) {\n  reasonCodes.push('P-002');\n  blockedActions.push('AUTOMATED_FOLLOWUP', 'PROSPECT_EMAIL', 'ALL_SIDE_EFFECTS');\n  passed = false;\n  dispositionIfTerminal = 'DISQUALIFIED';\n}\n\n// --- HR-004: Excluded services check ---\nif (passed) {\n  const excludedServices = input.excluded_services || [];\n  const serviceInterest = (lead.service_interest || '').trim().toLowerCase();\n\n  if (serviceInterest && Array.isArray(excludedServices) && excludedServices.length > 0) {\n    const isExcluded = excludedServices.some(\n      (s) => String(s).trim().toLowerCase() === serviceInterest\n    );\n    if (isExcluded) {\n      reasonCodes.push('P-003');\n      blockedActions.push('AUTOMATED_FOLLOWUP', 'PROSPECT_EMAIL', 'ALL_SIDE_EFFECTS');\n      passed = false;\n      dispositionIfTerminal = 'DISQUALIFIED';\n    }\n  }\n}\n\n// --- Determine final outcome ---\nif (passed) {\n  reasonCodes.push('P-004');\n  reasonCodes.push('P-005');\n  requiresAiAnalysis = true;\n  blockedActions.push('AUTOMATED_FOLLOWUP', 'PROSPECT_EMAIL');\n}\n\nreturn [{\n  json: {\n    lead_id: input.lead_id,\n    correlation_id: input.correlation_id,\n    policy_version: input.policy_version || 1,\n    normalized_lead: lead,\n    passed: passed,\n    reason_codes: reasonCodes,\n    requires_ai_analysis: requiresAiAnalysis,\n    blocked_actions: blockedActions,\n    disposition_if_terminal: dispositionIfTerminal,\n    excluded_services: input.excluded_services || []\n  }\n}];"
+      },
+      "id": "82b021cf-4b7d-49dd-b3bf-ac1f5177fab4",
+      "name": "Evaluate Prequalification Rules",
+      "type": "n8n-nodes-base.code",
+      "position": [1250, 150]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.passed }}", "operation": "equals", "value2": true }
+          ]
+        }
+      },
+      "id": "e45beec8-b284-4050-a6da-0da844740794",
+      "name": "Passed Prequalification?",
+      "type": "n8n-nodes-base.if",
+      "position": [1450, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'ANALYZING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "0cbd1965-dba4-494f-bf09-3072636c8ea9",
+      "name": "Set State ANALYZING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1650, 50],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'PREQUALIFYING', 'ANALYZING', 'STATE_TRANSITION', 'SYSTEM', 'P-004', jsonb_build_object('workflow', 'WF-06', 'requires_ai_analysis', true), NOW())"
+      },
+      "id": "397e380e-b620-49b8-982d-22a3089b78ca",
+      "name": "Log Event PREQUALIFYING→ANALYZING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1850, 50],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "disposition_if_terminal", "value": "NONE" }
+          ],
+          "boolean": [
+            { "name": "passed", "value": true },
+            { "name": "requires_ai_analysis", "value": true }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "c9d5e4f3-1b0a-4c7e-9f34-ab5678901234",
+      "name": "Assemble Passed Output",
+      "type": "n8n-nodes-base.set",
+      "position": [2050, 50]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'DECIDING', current_disposition = '{{ $json.disposition_if_terminal }}', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "849bbe93-1784-4a23-9529-6aa523798948",
+      "name": "Set State DECIDING (Terminal)",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1650, 300],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'PREQUALIFYING', 'DECIDING', 'STATE_TRANSITION', 'SYSTEM', '{{ $json.reason_codes[0] }}', jsonb_build_object('workflow', 'WF-06', 'disposition_if_terminal', '{{ $json.disposition_if_terminal }}'), NOW())"
+      },
+      "id": "b1a228d8-155f-45e5-8c17-6d41d71065eb",
+      "name": "Log Event PREQUALIFYING→DECIDING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1850, 300],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "disposition_if_terminal", "value": "={{ $json.disposition_if_terminal }}" }
+          ],
+          "boolean": [
+            { "name": "passed", "value": false },
+            { "name": "requires_ai_analysis", "value": false }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "d0e6f5a4-2c1b-4d8f-0a45-bc6789012345",
+      "name": "Assemble Disqualified Output",
+      "type": "n8n-nodes-base.set",
+      "position": [2050, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "disposition_if_terminal", "value": "NONE" }
+          ],
+          "boolean": [
+            { "name": "passed", "value": false },
+            { "name": "requires_ai_analysis", "value": false }
+          ]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "fcf3bf75-e31f-4bf4-93f2-468c26ed8b51",
+      "name": "Skip - Lead Not Valid",
+      "type": "n8n-nodes-base.set",
+      "position": [650, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "db42fd8c-4f14-41ce-8056-10988bcf8bd4",
+      "name": "Return Prequalification Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2250, 150]
+    }
+  ],
+  "connections": {
+    "Receive for Prequalification": {
+      "main": [[{ "node": "Is Lead Valid?", "type": "main", "index": 0 }]]
+    },
+    "Is Lead Valid?": {
+      "main": [
+        [{ "node": "Ensure State PREQUALIFYING", "type": "main", "index": 0 }],
+        [{ "node": "Skip - Lead Not Valid", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ensure State PREQUALIFYING": {
+      "main": [[{ "node": "Log Event DEDUPLICATING→PREQUALIFYING", "type": "main", "index": 0 }]]
+    },
+    "Log Event DEDUPLICATING→PREQUALIFYING": {
+      "main": [[{ "node": "Load Excluded Services Policy", "type": "main", "index": 0 }]]
+    },
+    "Load Excluded Services Policy": {
+      "main": [[{ "node": "Evaluate Prequalification Rules", "type": "main", "index": 0 }]]
+    },
+    "Evaluate Prequalification Rules": {
+      "main": [[{ "node": "Passed Prequalification?", "type": "main", "index": 0 }]]
+    },
+    "Passed Prequalification?": {
+      "main": [
+        [{ "node": "Set State ANALYZING", "type": "main", "index": 0 }],
+        [{ "node": "Set State DECIDING (Terminal)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State ANALYZING": {
+      "main": [[{ "node": "Log Event PREQUALIFYING→ANALYZING", "type": "main", "index": 0 }]]
+    },
+    "Log Event PREQUALIFYING→ANALYZING": {
+      "main": [[{ "node": "Assemble Passed Output", "type": "main", "index": 0 }]]
+    },
+    "Assemble Passed Output": {
+      "main": [[{ "node": "Return Prequalification Result", "type": "main", "index": 0 }]]
+    },
+    "Set State DECIDING (Terminal)": {
+      "main": [[{ "node": "Log Event PREQUALIFYING→DECIDING", "type": "main", "index": 0 }]]
+    },
+    "Log Event PREQUALIFYING→DECIDING": {
+      "main": [[{ "node": "Assemble Disqualified Output", "type": "main", "index": 0 }]]
+    },
+    "Assemble Disqualified Output": {
+      "main": [[{ "node": "Return Prequalification Result", "type": "main", "index": 0 }]]
+    },
+    "Skip - Lead Not Valid": {
+      "main": [[{ "node": "Return Prequalification Result", "type": "main", "index": 0 }]]
+    }
   },
-  "versionId": "0.0.0-placeholder",
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "versionId": "1.0.0",
   "staticData": null
 }

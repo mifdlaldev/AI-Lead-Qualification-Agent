@@ -1,10 +1,294 @@
 {
   "name": "WF-05 - claim-lead-idempotency",
-  "nodes": [],
-  "connections": {},
-  "settings": {
-    "callerPolicy": "workflowsFromSameOwner"
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "claim-lead-idempotency",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "id": "cd550fed-922a-4da9-b430-05b3ce36be04",
+      "name": "Receive Lead for Idempotency Check",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id AS existing_lead_id FROM leads WHERE source_system = '{{ $json.source_system }}' AND source_submission_id = '{{ $json.source_submission_id }}' AND source_submission_id IS NOT NULL AND id != '{{ $json.lead_id }}' LIMIT 1"
+      },
+      "id": "5498cb81-f86b-437b-b364-4df121768be1",
+      "name": "Check Source Identity Uniqueness",
+      "type": "n8n-nodes-base.postgres",
+      "position": [450, 300],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.existing_lead_id }}", "operation": "exists" }
+          ]
+        }
+      },
+      "id": "bf8e7a6b-af0a-44e9-a9f7-a1a3c3750393",
+      "name": "Source Match Found?",
+      "type": "n8n-nodes-base.if",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id AS existing_lead_id FROM leads WHERE payload_fingerprint = '{{ $json.payload_fingerprint }}' AND id != '{{ $json.lead_id }}' LIMIT 1"
+      },
+      "id": "3eb6ae40-6217-4be3-9f92-f83413761d16",
+      "name": "Check Fingerprint Match",
+      "type": "n8n-nodes-base.postgres",
+      "position": [850, 450],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.existing_lead_id }}", "operation": "exists" }
+          ]
+        }
+      },
+      "id": "31271bd4-d32e-438a-8eee-d4554e2060a8",
+      "name": "Fingerprint Match Found?",
+      "type": "n8n-nodes-base.if",
+      "position": [1050, 450]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            { "value1": "={{ $json.existing_lead_id }}", "operation": "equals", "value2": "={{ $json.lead_id }}" }
+          ]
+        }
+      },
+      "id": "b10e26bd-9e88-49b6-adb2-16f738f1dfe0",
+      "name": "Self-Replay?",
+      "type": "n8n-nodes-base.if",
+      "position": [1250, 350]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "reason_code", "value": "I-002" },
+            { "name": "action", "value": "BLOCK" },
+            { "name": "reason_code_label", "value": "EXACT_DUPLICATE" }
+          ],
+          "boolean": [{ "name": "is_duplicate", "value": true }]
+        },
+        "options": {}
+      },
+      "id": "4d1fd09c-cddd-4e1c-8aa7-0269595d9377",
+      "name": "Set Exact Duplicate Reason",
+      "type": "n8n-nodes-base.set",
+      "position": [850, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'DUPLICATE', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "fbe82528-faf5-490a-b634-c86ab1c7921e",
+      "name": "Set State DUPLICATE",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1050, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DEDUPLICATING', 'DUPLICATE', 'STATE_TRANSITION', 'SYSTEM', '{{ $json.reason_code }}', jsonb_build_object('workflow', 'WF-05', 'reason_label', '{{ $json.reason_code_label }}', 'existing_lead_id', '{{ $json.existing_lead_id }}'), NOW())"
+      },
+      "id": "c4951c95-4695-453b-a56a-ff4835fa8f34",
+      "name": "Log Event DEDUPLICATING→DUPLICATE",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1250, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "reason_code", "value": "I-003" },
+            { "name": "action", "value": "REPLAY_RECORD" },
+            { "name": "reason_code_label", "value": "FINGERPRINT_MATCH" }
+          ],
+          "boolean": [{ "name": "is_duplicate", "value": true }]
+        },
+        "options": {}
+      },
+      "id": "5b3cadb8-20c0-4aa8-bfbf-ec3bab6689c2",
+      "name": "Set Fingerprint Duplicate Reason",
+      "type": "n8n-nodes-base.set",
+      "position": [1450, 250]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "reason_code", "value": "I-004" },
+            { "name": "action", "value": "REPLAY_RECORD" },
+            { "name": "reason_code_label", "value": "REPLAY_CONFLICT" }
+          ],
+          "boolean": [{ "name": "is_duplicate", "value": true }]
+        },
+        "options": {}
+      },
+      "id": "10da2f7d-3812-4cda-a561-b7909b327b94",
+      "name": "Set Replay Conflict Output",
+      "type": "n8n-nodes-base.set",
+      "position": [1450, 350]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "reason_code", "value": "I-001" },
+            { "name": "action", "value": "PROCEED" },
+            { "name": "reason_code_label", "value": "NEW_SUBMISSION" }
+          ],
+          "boolean": [{ "name": "is_duplicate", "value": false }]
+        },
+        "options": {}
+      },
+      "id": "b4a97453-2b06-43f3-abfe-b03709a858ce",
+      "name": "Set New Submission Reason",
+      "type": "n8n-nodes-base.set",
+      "position": [1250, 600]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'PREQUALIFYING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "6abc5897-d0c9-4496-b702-50bbce731545",
+      "name": "Set State PREQUALIFYING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1450, 600],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'DEDUPLICATING', 'PREQUALIFYING', 'STATE_TRANSITION', 'SYSTEM', 'I-001', jsonb_build_object('workflow', 'WF-05', 'reason_label', 'NEW_SUBMISSION'), NOW())"
+      },
+      "id": "523e80c0-83ad-42e5-bc35-bb55f3fa1dc7",
+      "name": "Log Event DEDUPLICATING→PREQUALIFYING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1650, 600],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "reason_code", "value": "={{ $json.reason_code }}" },
+            { "name": "action", "value": "={{ $json.action }}" }
+          ],
+          "boolean": [{ "name": "is_duplicate", "value": "={{ $json.is_duplicate }}" }]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "a7f3c2d1-9b8e-4a5c-8d12-ef3456789012",
+      "name": "Assemble Duplicate Output",
+      "type": "n8n-nodes-base.set",
+      "position": [1450, 150]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "reason_code", "value": "I-001" },
+            { "name": "action", "value": "PROCEED" }
+          ],
+          "boolean": [{ "name": "is_duplicate", "value": false }]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "b8c4d3e2-0a9f-4b6d-9e23-fa4567890123",
+      "name": "Assemble New Output",
+      "type": "n8n-nodes-base.set",
+      "position": [1850, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "d9dd2350-32b8-4a4c-8f0a-dffc111ad559",
+      "name": "Return Idempotency Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [2050, 300]
+    }
+  ],
+  "connections": {
+    "Receive Lead for Idempotency Check": {
+      "main": [[{ "node": "Check Source Identity Uniqueness", "type": "main", "index": 0 }]]
+    },
+    "Check Source Identity Uniqueness": {
+      "main": [[{ "node": "Source Match Found?", "type": "main", "index": 0 }]]
+    },
+    "Source Match Found?": {
+      "main": [
+        [{ "node": "Set Exact Duplicate Reason", "type": "main", "index": 0 }],
+        [{ "node": "Check Fingerprint Match", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set Exact Duplicate Reason": {
+      "main": [[{ "node": "Set State DUPLICATE", "type": "main", "index": 0 }]]
+    },
+    "Set State DUPLICATE": {
+      "main": [[{ "node": "Log Event DEDUPLICATING→DUPLICATE", "type": "main", "index": 0 }]]
+    },
+    "Log Event DEDUPLICATING→DUPLICATE": {
+      "main": [[{ "node": "Assemble Duplicate Output", "type": "main", "index": 0 }]]
+    },
+    "Assemble Duplicate Output": {
+      "main": [[{ "node": "Return Idempotency Result", "type": "main", "index": 0 }]]
+    },
+    "Check Fingerprint Match": {
+      "main": [[{ "node": "Fingerprint Match Found?", "type": "main", "index": 0 }]]
+    },
+    "Fingerprint Match Found?": {
+      "main": [
+        [{ "node": "Self-Replay?", "type": "main", "index": 0 }],
+        [{ "node": "Set New Submission Reason", "type": "main", "index": 0 }]
+      ]
+    },
+    "Self-Replay?": {
+      "main": [
+        [{ "node": "Set Replay Conflict Output", "type": "main", "index": 0 }],
+        [{ "node": "Set Fingerprint Duplicate Reason", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set Fingerprint Duplicate Reason": {
+      "main": [[{ "node": "Set State DUPLICATE", "type": "main", "index": 0 }]]
+    },
+    "Set Replay Conflict Output": {
+      "main": [[{ "node": "Return Idempotency Result", "type": "main", "index": 0 }]]
+    },
+    "Set New Submission Reason": {
+      "main": [[{ "node": "Set State PREQUALIFYING", "type": "main", "index": 0 }]]
+    },
+    "Set State PREQUALIFYING": {
+      "main": [[{ "node": "Log Event DEDUPLICATING→PREQUALIFYING", "type": "main", "index": 0 }]]
+    },
+    "Log Event DEDUPLICATING→PREQUALIFYING": {
+      "main": [[{ "node": "Assemble New Output", "type": "main", "index": 0 }]]
+    },
+    "Assemble New Output": {
+      "main": [[{ "node": "Return Idempotency Result", "type": "main", "index": 0 }]]
+    }
   },
-  "versionId": "0.0.0-placeholder",
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "versionId": "1.0.0",
   "staticData": null
 }

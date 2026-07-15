@@ -1,10 +1,754 @@
 {
   "name": "WF-12 - send-prospect-email",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf-12-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e12a0001-0000-4000-a000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "lead_id",
+              "value": "={{ $json.lead_id }}"
+            },
+            {
+              "name": "action_key",
+              "value": "={{ $json.action_key }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.email }}"
+            },
+            {
+              "name": "full_name",
+              "value": "={{ $json.full_name || '' }}"
+            },
+            {
+              "name": "disposition",
+              "value": "={{ $json.disposition || '' }}"
+            },
+            {
+              "name": "email_template",
+              "value": "={{ $json.email_template || 'default' }}"
+            },
+            {
+              "name": "correlation_id",
+              "value": "={{ $json.correlation_id || '' }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "consent_to_contact",
+              "value": "={{ $json.consent_to_contact }}"
+            }
+          ],
+          "object": [
+            {
+              "name": "email_variables",
+              "value": "={{ $json.email_variables || {} }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12a0002-0000-4000-a000-000000000002",
+      "name": "Prep Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e12a0003-cond-0000-0000-000000000001",
+              "leftValue": "={{ $json.consent_to_contact }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e12a0003-0000-4000-a000-000000000003",
+      "name": "Check Consent",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "action_key",
+              "value": "={{ $('Prep Input').item.json.action_key }}"
+            },
+            {
+              "name": "status",
+              "value": "SKIPPED"
+            },
+            {
+              "name": "reason_code",
+              "value": "S-005"
+            },
+            {
+              "name": "skip_reason",
+              "value": "NO_CONSENT"
+            },
+            {
+              "name": "completed_at",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12a0004-0000-4000-a000-000000000004",
+      "name": "No Consent Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ action_key: $json.action_key, status: $json.status, reason_code: $json.reason_code, skip_reason: $json.skip_reason, completed_at: $json.completed_at }) }}",
+        "options": {}
+      },
+      "id": "e12a0005-0000-4000-a000-000000000005",
+      "name": "Respond No Consent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, status, attempt_count, provider_reference\nFROM side_effects\nWHERE action_key = '{{ $('Prep Input').item.json.action_key }}'"
+      },
+      "id": "e12a0006-0000-4000-a000-000000000006",
+      "name": "Check Action Key",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1000, 450],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e12a0007-cond-0000-0000-000000000001",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "SUCCEEDED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or",
+          "orConditions": [
+            {
+              "id": "e12a0007-cond-0000-0000-000000000002",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "FAILED",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "e12a0007-0000-4000-a000-000000000007",
+      "name": "Already Terminal?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 450]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "action_key",
+              "value": "={{ $('Prep Input').item.json.action_key }}"
+            },
+            {
+              "name": "status",
+              "value": "FAILED"
+            },
+            {
+              "name": "reason_code",
+              "value": "S-006"
+            },
+            {
+              "name": "error_classification",
+              "value": "ACTION_KEY_ALREADY_CLAIMED"
+            },
+            {
+              "name": "completed_at",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12a0008-0000-4000-a000-000000000008",
+      "name": "Already Claimed Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1500, 350]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ action_key: $json.action_key, status: $json.status, reason_code: $json.reason_code, error_classification: $json.error_classification, completed_at: $json.completed_at }) }}",
+        "options": {}
+      },
+      "id": "e12a0009-0000-4000-a000-000000000009",
+      "name": "Respond Already Claimed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1750, 350]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE side_effects\nSET status = 'IN_PROGRESS',\n    attempt_count = attempt_count + 1\nWHERE action_key = '{{ $('Prep Input').item.json.action_key }}'\n  AND status IN ('PENDING', 'RETRY_PENDING')\nRETURNING id, action_key, action_type, status, attempt_count"
+      },
+      "id": "e12a0010-0000-4000-a000-000000000010",
+      "name": "Update SE IN_PROGRESS",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1500, 550],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "email_subject",
+              "value": "={{ $('Prep Input').item.json.email_variables.subject || 'Thank you for your inquiry' }}"
+            },
+            {
+              "name": "email_body_html",
+              "value": "=<p>Hello {{ $('Prep Input').item.json.full_name || 'there' }},</p>\n\n<p>{{ $('Prep Input').item.json.email_variables.greeting || 'Thank you for reaching out to us regarding your project.' }}</p>\n\n<p>{{ $('Prep Input').item.json.email_variables.body || 'We have received your inquiry and will review it shortly. A member of our team will be in touch with you soon.' }}</p>\n\n<p>{{ $('Prep Input').item.json.email_variables.closing || 'Best regards,<br>The AI Automation Team' }}</p>\n\n<p style=\"color: #888; font-size: 12px;\">Template: {{ $('Prep Input').item.json.email_template }} | Ref: {{ $('Prep Input').item.json.action_key }}</p>"
+            },
+            {
+              "name": "from_email",
+              "value": "={{ $('Prep Input').item.json.email_variables.from || 'team@ai-automation.demo' }}"
+            },
+            {
+              "name": "to_email",
+              "value": "={{ $('Prep Input').item.json.email }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12a0011-0000-4000-a000-000000000011",
+      "name": "Build Email Payload",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1750, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$credentials.apiKey}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "from",
+              "value": "={{ $json.from_email }}"
+            },
+            {
+              "name": "to",
+              "value": "={{ $json.to_email }}"
+            },
+            {
+              "name": "subject",
+              "value": "={{ $json.email_subject }}"
+            },
+            {
+              "name": "html",
+              "value": "={{ $json.email_body_html }}"
+            }
+          ]
+        },
+        "options": {
+          "continueOnFail": true
+        }
+      },
+      "id": "e12a0012-0000-4000-a000-000000000012",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [2000, 550],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3",
+          "name": "Resend"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e12a0013-cond-0000-0000-000000000001",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e12a0013-0000-4000-a000-000000000013",
+      "name": "Email OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2250, 550]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE side_effects\nSET status = 'SUCCEEDED',\n    provider_reference = '{{ $json.id }}',\n    completed_at = NOW()\nWHERE action_key = '{{ $('Prep Input').item.json.action_key }}'\nRETURNING id, action_key, action_type, status, provider_reference, completed_at"
+      },
+      "id": "e12a0014-0000-4000-a000-000000000014",
+      "name": "Update SE SUCCEEDED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2500, 450],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Input').item.json.correlation_id }}',\n  '{{ $('Prep Input').item.json.lead_id }}'::uuid,\n  'ROUTING',\n  'ROUTING',\n  'SIDE_EFFECT',\n  'SYSTEM',\n  'S-003',\n  '{\"action_key\":\"{{ $('Prep Input').item.json.action_key }}\",\"action_type\":\"PROSPECT_EMAIL\",\"status\":\"SUCCEEDED\",\"template\":\"{{ $('Prep Input').item.json.email_template }}\"}'::jsonb\n)\nRETURNING id"
+      },
+      "id": "e12a0015-0000-4000-a000-000000000015",
+      "name": "Log Success Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2750, 450],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "action_key",
+              "value": "={{ $('Prep Input').item.json.action_key }}"
+            },
+            {
+              "name": "status",
+              "value": "SUCCEEDED"
+            },
+            {
+              "name": "reason_code",
+              "value": "S-003"
+            },
+            {
+              "name": "provider_reference",
+              "value": "={{ $('Update SE SUCCEEDED').item.json.provider_reference }}"
+            },
+            {
+              "name": "completed_at",
+              "value": "={{ $('Update SE SUCCEEDED').item.json.completed_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12a0016-0000-4000-a000-000000000016",
+      "name": "Success Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [3000, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ action_key: $json.action_key, status: $json.status, reason_code: $json.reason_code, provider_reference: $json.provider_reference, completed_at: $json.completed_at }) }}",
+        "options": {}
+      },
+      "id": "e12a0017-0000-4000-a000-000000000017",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3250, 450]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE side_effects\nSET status = 'FAILED',\n    error_classification = '{{ $json.error || 'RESEND_API_ERROR' }}',\n    completed_at = NOW()\nWHERE action_key = '{{ $('Prep Input').item.json.action_key }}'\nRETURNING id, action_key, action_type, status, error_classification, completed_at"
+      },
+      "id": "e12a0018-0000-4000-a000-000000000018",
+      "name": "Update SE FAILED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2500, 700],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Input').item.json.correlation_id }}',\n  '{{ $('Prep Input').item.json.lead_id }}'::uuid,\n  'ROUTING',\n  'ROUTING',\n  'SIDE_EFFECT',\n  'SYSTEM',\n  'S-004',\n  '{\"action_key\":\"{{ $('Prep Input').item.json.action_key }}\",\"action_type\":\"PROSPECT_EMAIL\",\"status\":\"FAILED\",\"error\":\"{{ $json.error || 'RESEND_API_ERROR' }}\",\"template\":\"{{ $('Prep Input').item.json.email_template }}\"}'::jsonb\n)\nRETURNING id"
+      },
+      "id": "e12a0019-0000-4000-a000-000000000019",
+      "name": "Log Failure Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [2750, 700],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "action_key",
+              "value": "={{ $('Prep Input').item.json.action_key }}"
+            },
+            {
+              "name": "status",
+              "value": "FAILED"
+            },
+            {
+              "name": "reason_code",
+              "value": "S-004"
+            },
+            {
+              "name": "error_classification",
+              "value": "={{ $('Update SE FAILED').item.json.error_classification }}"
+            },
+            {
+              "name": "completed_at",
+              "value": "={{ $('Update SE FAILED').item.json.completed_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e12a0020-0000-4000-a000-000000000020",
+      "name": "Failure Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [3000, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ action_key: $json.action_key, status: $json.status, reason_code: $json.reason_code, error_classification: $json.error_classification, completed_at: $json.completed_at }) }}",
+        "options": {}
+      },
+      "id": "e12a0021-0000-4000-a000-000000000021",
+      "name": "Respond Failure",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [3250, 700]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prep Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Input": {
+      "main": [
+        [
+          {
+            "node": "Check Consent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Consent": {
+      "main": [
+        [
+          {
+            "node": "Check Action Key",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Consent Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Consent Output": {
+      "main": [
+        [
+          {
+            "node": "Respond No Consent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Action Key": {
+      "main": [
+        [
+          {
+            "node": "Already Terminal?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Terminal?": {
+      "main": [
+        [
+          {
+            "node": "Already Claimed Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update SE IN_PROGRESS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Already Claimed Output": {
+      "main": [
+        [
+          {
+            "node": "Respond Already Claimed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update SE IN_PROGRESS": {
+      "main": [
+        [
+          {
+            "node": "Build Email Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email Payload": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Email OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email OK?": {
+      "main": [
+        [
+          {
+            "node": "Update SE SUCCEEDED",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update SE FAILED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update SE SUCCEEDED": {
+      "main": [
+        [
+          {
+            "node": "Log Success Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Success Event": {
+      "main": [
+        [
+          {
+            "node": "Success Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Success Output": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update SE FAILED": {
+      "main": [
+        [
+          {
+            "node": "Log Failure Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Failure Event": {
+      "main": [
+        [
+          {
+            "node": "Failure Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Failure Output": {
+      "main": [
+        [
+          {
+            "node": "Respond Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

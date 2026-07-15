@@ -1,10 +1,182 @@
 {
   "name": "WF-04 - validate-normalize-lead",
-  "nodes": [],
-  "connections": {},
-  "settings": {
-    "callerPolicy": "workflowsFromSameOwner"
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "validate-normalize-lead",
+        "responseMode": "responseNode",
+        "options": { "rawBody": true }
+      },
+      "id": "4092f579-dcab-4af1-8a3e-74bad2922edc",
+      "name": "Receive Lead for Validation",
+      "type": "n8n-nodes-base.webhook",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF-04: Validation & Normalization\n// Validates required fields, email format, name length, consent.\n// Produces reason codes V-001 to V-010 and normalized lead output.\n\nconst input = $input.first().json;\n\n// --- Trim fields ---\nconst fullName = (input.full_name || '').trim();\nconst email = (input.email || '').trim().toLowerCase();\nconst projectDesc = (input.project_description || '').trim();\nconst consent = input.consent_to_contact;\n\n// --- Validation checks ---\nconst reasonCodes = [];\nlet isTerminal = false;\n\n// V-001: Missing required field\nconst missingRequired = !fullName || !email || !projectDesc || consent === undefined || consent === null;\nif (missingRequired) {\n  reasonCodes.push('V-001');\n  isTerminal = true;\n}\n\n// V-002: Invalid email format\nif (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {\n  reasonCodes.push('V-002');\n}\n\n// V-003: Empty project description\nif (!projectDesc) {\n  reasonCodes.push('V-003');\n  isTerminal = true;\n}\n\n// V-004: Name too short\nif (fullName && fullName.length < 2) {\n  reasonCodes.push('V-004');\n}\n\n// --- Determine validity ---\nconst isValid = reasonCodes.length === 0;\nif (isValid) {\n  reasonCodes.push('V-010');\n}\n\n// --- Determine recoverability ---\nlet recoverability;\nif (isValid) {\n  recoverability = 'VALID';\n} else if (isTerminal) {\n  recoverability = 'TERMINAL';\n} else {\n  recoverability = 'REVIEWABLE';\n}\n\n// --- Build normalized lead ---\nconst normalizedLead = {\n  full_name: fullName,\n  email: email,\n  project_description: projectDesc,\n  consent_to_contact: consent === true,\n  company_name: (input.company_name || '').trim(),\n  company_website: (input.company_website || '').trim(),\n  job_title: (input.job_title || '').trim(),\n  phone: (input.phone || '').trim(),\n  country: (input.country || '').trim(),\n  budget_range: (input.budget_range || '').trim(),\n  desired_timeline: (input.desired_timeline || '').trim(),\n  service_interest: (input.service_interest || '').trim(),\n  lead_source: (input.lead_source || '').trim(),\n  utm_source: (input.utm_source || '').trim(),\n  utm_medium: (input.utm_medium || '').trim(),\n  utm_campaign: (input.utm_campaign || '').trim(),\n  utm_term: (input.utm_term || '').trim(),\n  utm_content: (input.utm_content || '').trim()\n};\n\nreturn [{\n  json: {\n    lead_id: input.lead_id,\n    correlation_id: input.correlation_id,\n    is_valid: isValid,\n    reason_codes: reasonCodes,\n    recoverability: recoverability,\n    normalized_lead: normalizedLead,\n    source_system: input.source_system || '',\n    source_submission_id: input.source_submission_id || '',\n    payload_fingerprint: input.payload_fingerprint || '',\n    policy_version: input.policy_version || 1\n  }\n}];"
+      },
+      "id": "8e4cf7c2-e4f5-4b4c-ab03-74f54ec0a28d",
+      "name": "Validate & Build Reason Codes",
+      "type": "n8n-nodes-base.code",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            { "value1": "={{ $json.is_valid }}", "operation": "equals", "value2": true }
+          ]
+        }
+      },
+      "id": "2dc092e4-bbc3-4c97-bfce-3a20c53765c3",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'VALIDATING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}' AND current_processing_state = 'RECEIVED'"
+      },
+      "id": "618f7182-6e5f-4dd2-a3db-6dfc89b79f73",
+      "name": "Set State VALIDATING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [850, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'RECEIVED', 'VALIDATING', 'STATE_TRANSITION', 'SYSTEM', 'V-010', jsonb_build_object('workflow', 'WF-04', 'recoverability', 'VALID'), NOW())"
+      },
+      "id": "43a768de-aaef-4863-99b1-fad167b77f07",
+      "name": "Log Event RECEIVED→VALIDATING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1050, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'DEDUPLICATING', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "77b96155-234c-448f-af5f-8004b0501140",
+      "name": "Set State DEDUPLICATING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1250, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'VALIDATING', 'DEDUPLICATING', 'STATE_TRANSITION', 'SYSTEM', 'V-010', jsonb_build_object('workflow', 'WF-04', 'recoverability', 'VALID'), NOW())"
+      },
+      "id": "92c5b1ca-8b35-4ccb-8faa-81c0ac153068",
+      "name": "Log Event VALIDATING→DEDUPLICATING",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1450, 150],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [{ "name": "recoverability", "value": "VALID" }],
+          "boolean": [{ "name": "is_valid", "value": true }]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "983a22b1-5c7d-4e3f-9a12-cd456ef78901",
+      "name": "Build Valid Output",
+      "type": "n8n-nodes-base.set",
+      "position": [1650, 150]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'INVALID', updated_at = NOW() WHERE id = '{{ $json.lead_id }}'"
+      },
+      "id": "b28c7f32-d8e8-47d6-8477-d6f8c17bd589",
+      "name": "Set State INVALID",
+      "type": "n8n-nodes-base.postgres",
+      "position": [850, 450],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', 'VALIDATING', 'INVALID', 'STATE_TRANSITION', 'SYSTEM', '{{ $json.reason_codes[0] }}', jsonb_build_object('workflow', 'WF-04', 'recoverability', '{{ $json.recoverability }}'), NOW())"
+      },
+      "id": "2d5eb9e8-af52-4ccc-ad55-1bc251486504",
+      "name": "Log Event VALIDATING→INVALID",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1050, 450],
+      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [{ "name": "recoverability", "value": "={{ $json.recoverability }}" }],
+          "boolean": [{ "name": "is_valid", "value": false }]
+        },
+        "options": { "include": "none" }
+      },
+      "id": "501c7b3e-8c8c-4537-8de9-f719ed15826c",
+      "name": "Build Invalid Output",
+      "type": "n8n-nodes-base.set",
+      "position": [1250, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "0a7ede32-2433-46ab-8344-b01327b250f4",
+      "name": "Return Validation Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Receive Lead for Validation": {
+      "main": [[{ "node": "Validate & Build Reason Codes", "type": "main", "index": 0 }]]
+    },
+    "Validate & Build Reason Codes": {
+      "main": [[{ "node": "Is Valid?", "type": "main", "index": 0 }]]
+    },
+    "Is Valid?": {
+      "main": [
+        [{ "node": "Set State VALIDATING", "type": "main", "index": 0 }],
+        [{ "node": "Set State INVALID", "type": "main", "index": 0 }]
+      ]
+    },
+    "Set State VALIDATING": {
+      "main": [[{ "node": "Log Event RECEIVED→VALIDATING", "type": "main", "index": 0 }]]
+    },
+    "Log Event RECEIVED→VALIDATING": {
+      "main": [[{ "node": "Set State DEDUPLICATING", "type": "main", "index": 0 }]]
+    },
+    "Set State DEDUPLICATING": {
+      "main": [[{ "node": "Log Event VALIDATING→DEDUPLICATING", "type": "main", "index": 0 }]]
+    },
+    "Log Event VALIDATING→DEDUPLICATING": {
+      "main": [[{ "node": "Build Valid Output", "type": "main", "index": 0 }]]
+    },
+    "Build Valid Output": {
+      "main": [[{ "node": "Return Validation Result", "type": "main", "index": 0 }]]
+    },
+    "Set State INVALID": {
+      "main": [[{ "node": "Log Event VALIDATING→INVALID", "type": "main", "index": 0 }]]
+    },
+    "Log Event VALIDATING→INVALID": {
+      "main": [[{ "node": "Build Invalid Output", "type": "main", "index": 0 }]]
+    },
+    "Build Invalid Output": {
+      "main": [[{ "node": "Return Validation Result", "type": "main", "index": 0 }]]
+    }
   },
-  "versionId": "0.0.0-placeholder",
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "versionId": "1.0.0",
   "staticData": null
 }

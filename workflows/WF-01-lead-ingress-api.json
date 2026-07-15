@@ -1,10 +1,290 @@
 {
   "name": "WF-01 - lead-ingress-api",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "api/leads",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "name": "Receive API Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// WF-01: API Ingress\n// Validates inbound-lead-v1 schema, generates IDs, builds fingerprint.\n// Pure ingress - no qualification logic.\n\nconst crypto = require('crypto');\nconst input = $input.first().json;\n\n// --- Generate UUID v4 ---\nfunction uuidv4() {\n  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {\n    const r = Math.random() * 16 | 0;\n    const v = c === 'x' ? r : (r & 0x3 | 0x8);\n    return v.toString(16);\n  });\n}\n\nconst correlationId = uuidv4();\nconst leadId = uuidv4();\n\n// --- Validate required fields ---\nconst fullName = (input.full_name || '').trim();\nconst email = (input.email || '').trim().toLowerCase();\nconst projectDesc = (input.project_description || '').trim();\nconst consent = input.consent_to_contact;\n\nconst missingRequired = !fullName || !email || !projectDesc || consent === undefined || consent === null;\nconst invalidEmail = email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email);\n\nconst isValid = !missingRequired && !invalidEmail;\n\n// --- Build fingerprint: deterministic SHA-256 hash of key fields ---\nconst fingerprintSource = JSON.stringify({\n  full_name: fullName,\n  email: email,\n  project_description: projectDesc.substring(0, 200),\n  company_name: (input.company_name || '').trim(),\n  phone: (input.phone || '').trim()\n});\nconst fingerprint = crypto.createHash('sha256').update(fingerprintSource).digest('hex');\n\n// --- Timestamp ---\nconst receivedAt = new Date().toISOString();\nconst submissionId = input.submission_id || ('sub_' + Date.now() + '_' + Math.random().toString(36).substring(2, 10));\n\n// --- Build normalized payload for DB insert ---\nconst normalizedInput = {\n  full_name: fullName,\n  email: email,\n  project_description: projectDesc,\n  consent_to_contact: consent === true,\n  company_name: (input.company_name || '').trim(),\n  company_website: (input.company_website || '').trim(),\n  job_title: (input.job_title || '').trim(),\n  phone: (input.phone || '').trim(),\n  country: (input.country || '').trim(),\n  budget_range: (input.budget_range || 'NOT_PROVIDED').trim(),\n  desired_timeline: (input.desired_timeline || '').trim(),\n  service_interest: (input.service_interest || '').trim(),\n  lead_source: (input.lead_source || '').trim(),\n  utm_source: (input.utm_source || '').trim(),\n  utm_medium: (input.utm_medium || '').trim(),\n  utm_campaign: (input.utm_campaign || '').trim(),\n  utm_term: (input.utm_term || '').trim(),\n  utm_content: (input.utm_content || '').trim()\n};\n\nreturn {\n  correlation_id: correlationId,\n  lead_id: leadId,\n  submission_id: submissionId,\n  fingerprint: fingerprint,\n  received_at: receivedAt,\n  is_valid: isValid,\n  missing_required: missingRequired,\n  invalid_email: invalidEmail,\n  ...normalizedInput\n};"
+      },
+      "id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+      "name": "Validate & Generate IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_valid }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "c3d4e5f6-a7b8-4c9d-0e1f-2a3b4c5d6e7f",
+      "name": "Is Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO leads (id, source_system, source_submission_id, full_name, email, company_name, company_website, job_title, phone, country, project_description, budget_range, desired_timeline, service_interest, lead_source, consent_to_contact, payload_fingerprint, current_processing_state, current_disposition, policy_version, schema_version, received_at, updated_at, utm_source, utm_medium, utm_campaign, utm_term, utm_content) VALUES ('{{ $json.lead_id }}', 'api', '{{ $json.submission_id }}', '{{ $json.full_name }}', '{{ $json.email }}', '{{ $json.company_name }}', '{{ $json.company_website }}', '{{ $json.job_title }}', '{{ $json.phone }}', '{{ $json.country }}', '{{ $json.project_description }}', '{{ $json.budget_range }}', '{{ $json.desired_timeline }}', '{{ $json.service_interest }}', '{{ $json.lead_source }}', '{{ $json.consent_to_contact }}'::boolean, '{{ $json.fingerprint }}', 'RECEIVED', 'NONE', 1, 1, '{{ $json.received_at }}', '{{ $json.received_at }}', '{{ $json.utm_source }}', '{{ $json.utm_medium }}', '{{ $json.utm_campaign }}', '{{ $json.utm_term }}', '{{ $json.utm_content }}')"
+      },
+      "id": "d4e5f6a7-b8c9-4d0e-1f2a-3b4c5d6e7f8a",
+      "name": "Insert Lead Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [850, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_runs (id, lead_id, correlation_id, attempt_number, workflow_version, started_at, final_status) VALUES (gen_random_uuid(), '{{ $json.lead_id }}', '{{ $json.correlation_id }}', 1, '1.0.0', '{{ $json.received_at }}', 'IN_PROGRESS')"
+      },
+      "id": "e5f6a7b8-c9d0-4e1f-2a3b-4c5d6e7f8a9b",
+      "name": "Create Processing Run",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1050, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), '{{ $json.correlation_id }}', '{{ $json.lead_id }}', NULL, 'RECEIVED', 'STATE_TRANSITION', 'SYSTEM', 'INGRESS_API', jsonb_build_object('workflow', 'WF-01', 'source_system', 'api', 'submission_id', '{{ $json.submission_id }}'), '{{ $json.received_at }}')"
+      },
+      "id": "f6a7b8c9-d0e1-4f2a-3b4c-5d6e7f8a9b0c",
+      "name": "Log Event RECEIVED",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [1250, 150],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "correlation_id",
+              "value": "={{ $json.correlation_id }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $json.lead_id }}"
+            },
+            {
+              "name": "source_system",
+              "value": "api"
+            },
+            {
+              "name": "received_at",
+              "value": "={{ $json.received_at }}"
+            },
+            {
+              "name": "status",
+              "value": "RECEIVED"
+            },
+            {
+              "name": "submission_id",
+              "value": "={{ $json.submission_id }}"
+            },
+            {
+              "name": "schema_version",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {
+          "include": "none"
+        }
+      },
+      "id": "a7b8c9d0-e1f2-4a3b-4c5d-6e7f8a9b0c1d",
+      "name": "Build Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1450, 150]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "error",
+              "value": "validation_failed"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.missing_required ? 'Missing required fields (full_name, email, project_description, consent_to_contact)' : 'Invalid email format' }}"
+            },
+            {
+              "name": "status",
+              "value": "INVALID"
+            }
+          ],
+          "number": [
+            {
+              "name": "http_status",
+              "value": 400
+            }
+          ]
+        },
+        "options": {
+          "include": "none"
+        }
+      },
+      "id": "b8c9d0e1-f2a3-4b4c-5d6e-7f8a9b0c1d2e",
+      "name": "Build Error Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [850, 450]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "c9d0e1f2-a3b4-4c5d-6e7f-8a9b0c1d2e3f",
+      "name": "Return API Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    }
+  ],
+  "connections": {
+    "Receive API Lead": {
+      "main": [
+        [
+          {
+            "node": "Validate & Generate IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Generate IDs": {
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid?": {
+      "main": [
+        [
+          {
+            "node": "Insert Lead Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Lead Record": {
+      "main": [
+        [
+          {
+            "node": "Create Processing Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Processing Run": {
+      "main": [
+        [
+          {
+            "node": "Log Event RECEIVED",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Event RECEIVED": {
+      "main": [
+        [
+          {
+            "node": "Build Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Success Response": {
+      "main": [
+        [
+          {
+            "node": "Return API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Error Response": {
+      "main": [
+        [
+          {
+            "node": "Return API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

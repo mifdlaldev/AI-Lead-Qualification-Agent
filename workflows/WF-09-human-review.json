@@ -1,10 +1,323 @@
 {
-  "name": "WF-09 - human-review",
-  "nodes": [],
-  "connections": {},
+  "name": "WF-09 - Human Review Creation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "human-review",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a01-8001-100000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "token_ttl_hours",
+              "value": "={{ $json.token_ttl_hours !== undefined ? $json.token_ttl_hours : 72 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a02-8002-100000000002",
+      "name": "Set Defaults",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "action": "random",
+        "encoding": "hex",
+        "length": 32,
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a03-8003-100000000003",
+      "name": "Generate Token",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_token_plaintext",
+              "value": "={{ $json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a04-8004-100000000004",
+      "name": "Save Plaintext Token",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "action": "hash",
+        "type": "SHA256",
+        "value": "={{ $json.review_token_plaintext }}",
+        "encoding": "hex",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a05-8005-100000000005",
+      "name": "Hash Token",
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_token_hash",
+              "value": "={{ $json.data }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a06-8006-100000000006",
+      "name": "Save Token Hash",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO review_items (id, lead_id, decision_id, automated_recommendation, review_reason_codes, status, review_token_hash, review_token_expires_at, created_at) VALUES (gen_random_uuid(), {{ $json.lead_id }}::uuid, {{ $json.decision_id }}::uuid, {{ $json.automated_recommendation }}, {{ JSON.stringify($json.review_reason_codes) }}::jsonb, 'OPEN', {{ $json.review_token_hash }}, NOW() + ({{ $json.token_ttl_hours }} * INTERVAL '1 hour'), NOW()) RETURNING id AS review_id, review_token_hash, review_token_expires_at, status, created_at",
+        "additionalFields": {}
+      },
+      "id": "a1b2c3d4-e509-4a07-8007-100000000007",
+      "name": "Insert Review Item",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [450, 500],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET current_processing_state = 'AWAITING_HUMAN_REVIEW', current_disposition = 'HUMAN_REVIEW', updated_at = NOW() WHERE id = {{ $json.lead_id }}::uuid",
+        "additionalFields": {}
+      },
+      "id": "a1b2c3d4-e509-4a08-8008-100000000008",
+      "name": "Update Lead State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [650, 500],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (id, correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at) VALUES (gen_random_uuid(), {{ $json.correlation_id }}, {{ $json.lead_id }}::uuid, 'DECIDING', 'AWAITING_HUMAN_REVIEW', 'STATE_TRANSITION', 'SYSTEM', 'H-001', {{ JSON.stringify({ review_id: $json.review_id, decision_id: $json.decision_id }) }}::jsonb, NOW())",
+        "additionalFields": {}
+      },
+      "id": "a1b2c3d4-e509-4a09-8009-100000000009",
+      "name": "Log Review Created Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [850, 500],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "review_id",
+              "value": "={{ $json.review_id }}"
+            },
+            {
+              "name": "review_token",
+              "value": "={{ $json.review_token_plaintext }}"
+            },
+            {
+              "name": "review_token_hash",
+              "value": "={{ $json.review_token_hash }}"
+            },
+            {
+              "name": "review_token_expires_at",
+              "value": "={{ $json.review_token_expires_at }}"
+            },
+            {
+              "name": "status",
+              "value": "OPEN"
+            },
+            {
+              "name": "reason_code",
+              "value": "H-001"
+            },
+            {
+              "name": "created_at",
+              "value": "={{ $json.created_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a0a-800a-10000000000a",
+      "name": "Prepare Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [1050, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {}
+      },
+      "id": "a1b2c3d4-e509-4a0b-800b-10000000000b",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Set Defaults",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Defaults": {
+      "main": [
+        [
+          {
+            "node": "Generate Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Token": {
+      "main": [
+        [
+          {
+            "node": "Save Plaintext Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Plaintext Token": {
+      "main": [
+        [
+          {
+            "node": "Hash Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hash Token": {
+      "main": [
+        [
+          {
+            "node": "Save Token Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Token Hash": {
+      "main": [
+        [
+          {
+            "node": "Insert Review Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Review Item": {
+      "main": [
+        [
+          {
+            "node": "Update Lead State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead State": {
+      "main": [
+        [
+          {
+            "node": "Log Review Created Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Review Created Event": {
+      "main": [
+        [
+          {
+            "node": "Prepare Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

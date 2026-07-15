@@ -1,10 +1,973 @@
 {
   "name": "WF-08 - qualification-decision",
-  "nodes": [],
-  "connections": {},
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf-08-qualification-decision",
+        "responseMode": "lastNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "00000000-0000-4008-0001-000000000001",
+      "name": "01 | Receive Decision Request",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-1000, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "lead_id",
+              "value": "={{ $json.body.lead_id }}"
+            },
+            {
+              "name": "correlation_id",
+              "value": "={{ $json.body.correlation_id }}"
+            },
+            {
+              "name": "policy_version",
+              "value": "={{ $json.body.policy_version }}"
+            },
+            {
+              "name": "processing_run_id",
+              "value": "={{ $json.body.ai_analysis_result.processing_run_id }}"
+            },
+            {
+              "name": "validation_status",
+              "value": "={{ $json.body.ai_analysis_result.validation_status }}"
+            },
+            {
+              "name": "service_fit",
+              "value": "={{ $json.body.ai_analysis_result.analysis_result.service_fit }}"
+            },
+            {
+              "name": "confidence",
+              "value": "={{ $json.body.ai_analysis_result.analysis_result.confidence }}"
+            },
+            {
+              "name": "intent_signal",
+              "value": "={{ $json.body.ai_analysis_result.analysis_result.intent_signal }}"
+            },
+            {
+              "name": "risk_flags_json",
+              "value": "={{ JSON.stringify($json.body.ai_analysis_result.analysis_result.risk_flags || []) }}"
+            },
+            {
+              "name": "missing_info_json",
+              "value": "={{ JSON.stringify($json.body.ai_analysis_result.analysis_result.missing_information || []) }}"
+            },
+            {
+              "name": "hard_exclusion",
+              "value": "={{ $json.body.prequalification_result.hard_exclusion || false }}"
+            },
+            {
+              "name": "excluded_service",
+              "value": "={{ $json.body.prequalification_result.excluded_service || false }}"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "hard_exclusion_flag",
+              "value": "={{ $json.body.prequalification_result.hard_exclusion === true || $json.body.prequalification_result.excluded_service === true }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0002-000000000002",
+      "name": "02 | Extract Input Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [-600, 0]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH updated_lead AS (\n  UPDATE leads\n  SET current_processing_state = 'DECIDING', updated_at = NOW()\n  WHERE id = '{{ $json.lead_id }}'\n  RETURNING id\n)\nINSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at)\nSELECT '{{ $json.correlation_id }}', id, 'ANALYZING', 'DECIDING', 'STATE_TRANSITION', 'SYSTEM', 'D-001', '{}'::jsonb, NOW()\nFROM updated_lead"
+      },
+      "id": "00000000-0000-4008-0003-000000000003",
+      "name": "03 | Begin Decision & Log Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [-200, 0],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.hard_exclusion_flag }}",
+              "operation": "equals",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "00000000-0000-4008-0004-000000000004",
+      "name": "04 | Hard Exclusion?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "DISQUALIFIED"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "={{ $json.excluded_service === 'true' ? '[\"D-005\"]' : '[\"D-004\"]' }}"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "={{ $json.excluded_service === 'true' ? 'D-005' : 'D-004' }}"
+            },
+{
+              "name": "reason_codes_json",
+              "value": "={{ $json.excluded_service ? '[\"D-005\"]' : '[\"D-004\"]' }}"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "={{ $json.excluded_service ? 'D-005' : 'D-004' }}"
+            },
+            {
+              "name": "decision_reason",
+              "value": "={{ $json.excluded_service ? 'Excluded service detected' : 'Hard exclusion rule applied' }}"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0005-000000000005",
+      "name": "05 | Set DISQUALIFIED (Hard Exclusion)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [600, -400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.validation_status }}",
+              "operation": "equals",
+              "value2": "VALID"
+            }
+          ]
+        }
+      },
+      "id": "00000000-0000-4008-0006-000000000006",
+      "name": "06 | AI Analysis Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "HUMAN_REVIEW"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "=[\"D-009\"]"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "D-009"
+            },
+            {
+              "name": "evidence_references_json",
+              "value": "={\"ai_analysis\": \"validation_failed\"}"
+            },
+            {
+              "name": "confidence_level",
+              "value": "UNKNOWN"
+            },
+            {
+              "name": "decision_reason",
+              "value": "AI analysis output is invalid or malformed"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0007-000000000007",
+      "name": "07 | Set HUMAN_REVIEW (D-009)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1000, -200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "has_prompt_injection",
+              "value": "={{ $json.risk_flags_json.includes('PROMPT_INJECTION_SUSPECTED') || $json.risk_flags_json.includes('ADVERSARIAL_CONTENT') ? 'true' : 'false' }}"
+            },
+            {
+              "name": "has_contradictory",
+              "value": "={{ $json.risk_flags_json.includes('CONTRADICTORY_SIGNALS') ? 'true' : 'false' }}"
+            }
+          ],
+          "number": [],
+          "boolean": []
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0008-000000000008",
+      "name": "08 | Evaluate Risk Flags",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1000, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.has_prompt_injection }}",
+              "operation": "equals",
+              "value2": "true"
+            }
+          ]
+        }
+      },
+      "id": "00000000-0000-4008-0009-000000000009",
+      "name": "09 | Has Security Risk Flags?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1400, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "HUMAN_REVIEW"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "=[\"D-008\"]"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "D-008"
+            },
+            {
+              "name": "evidence_references_json",
+              "value": "={\"ai_analysis\": \"security_risk_flags_detected\"}"
+            },
+            {
+              "name": "confidence_level",
+              "value": "={{ $json.confidence }}"
+            },
+            {
+              "name": "decision_reason",
+              "value": "Prompt injection or adversarial content detected in lead submission"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0010-000000000010",
+      "name": "10 | Set HUMAN_REVIEW (D-008)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1800, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "combinator": "OR"
+          },
+          "string": [
+            {
+              "value1": "={{ $json.confidence }}",
+              "operation": "equals",
+              "value2": "HIGH"
+            },
+            {
+              "value1": "={{ $json.confidence }}",
+              "operation": "equals",
+              "value2": "MEDIUM"
+            }
+          ]
+        }
+      },
+      "id": "00000000-0000-4008-0011-000000000011",
+      "name": "11 | Confidence >= MEDIUM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1800, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "HUMAN_REVIEW"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "=[\"D-007\"]"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "D-007"
+            },
+            {
+              "name": "evidence_references_json",
+              "value": "={\"ai_analysis\": \"low_confidence\"}"
+            },
+            {
+              "name": "confidence_level",
+              "value": "={{ $json.confidence }}"
+            },
+            {
+              "name": "decision_reason",
+              "value": "AI confidence below threshold - requires human review"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0012-000000000012",
+      "name": "12 | Set HUMAN_REVIEW (D-007)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [2200, -200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "combinator": "OR"
+          },
+          "string": [
+            {
+              "value1": "={{ $json.service_fit }}",
+              "operation": "equals",
+              "value2": "IN_SCOPE"
+            },
+            {
+              "value1": "={{ $json.service_fit }}",
+              "operation": "equals",
+              "value2": "PARTIAL"
+            }
+          ]
+        }
+      },
+      "id": "00000000-0000-4008-0013-000000000013",
+      "name": "13 | Service Fit IN_SCOPE or PARTIAL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2200, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "QUALIFIED"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "=[\"D-001\"]"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "D-001"
+            },
+            {
+              "name": "evidence_references_json",
+              "value": "={\"ai_analysis\": \"all_criteria_met\", \"service_fit\": \"{{ $json.service_fit }}\", \"confidence\": \"{{ $json.confidence }}\"}"
+            },
+            {
+              "name": "confidence_level",
+              "value": "={{ $json.confidence }}"
+            },
+            {
+              "name": "decision_reason",
+              "value": "All qualification criteria met - service fit in scope, sufficient confidence"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0014-000000000014",
+      "name": "14 | Set QUALIFIED (D-001)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [2600, -400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.service_fit }}",
+              "operation": "equals",
+              "value2": "OUT_OF_SCOPE"
+            }
+          ]
+        }
+      },
+      "id": "00000000-0000-4008-0015-000000000015",
+      "name": "15 | Service Fit OUT_OF_SCOPE?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2600, 0]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "DISQUALIFIED"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "=[\"D-004\"]"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "D-004"
+            },
+            {
+              "name": "evidence_references_json",
+              "value": "={\"ai_analysis\": \"out_of_scope\", \"service_fit\": \"OUT_OF_SCOPE\"}"
+            },
+            {
+              "name": "confidence_level",
+              "value": "={{ $json.confidence }}"
+            },
+            {
+              "name": "decision_reason",
+              "value": "Project request is out of scope with sufficient confidence"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0016-000000000016",
+      "name": "16 | Set DISQUALIFIED (D-004)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [3000, -200]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "disposition",
+              "value": "NURTURE"
+            },
+            {
+              "name": "reason_codes_json",
+              "value": "={{ $json.missing_info_json === '[]' ? '[\"D-003\"]' : '[\"D-002\"]' }}"
+            },
+            {
+              "name": "primary_reason_code",
+              "value": "={{ $json.missing_info_json === '[]' ? 'D-003' : 'D-002' }}"
+            },
+            {
+              "name": "evidence_references_json",
+              "value": "={\"ai_analysis\": \"insufficient_for_qualified\", \"service_fit\": \"{{ $json.service_fit }}\"}"
+            },
+            {
+              "name": "confidence_level",
+              "value": "={{ $json.confidence }}"
+            },
+            {
+              "name": "decision_reason",
+              "value": "={{ $json.missing_info_json === '[]' ? 'Weak intent signal - insufficient for qualification' : 'Missing information prevents qualification' }}"
+            }
+          ],
+          "number": [],
+          "boolean": [
+            {
+              "name": "requires_human_review",
+              "value": false
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0017-000000000017",
+      "name": "17 | Set NURTURE (D-002/D-003)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [3000, 200]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO decisions (lead_id, processing_run_id, policy_version, automated_disposition, reason_codes, evidence_references, requires_human_review, created_at)\nVALUES (\n  '{{ $json.lead_id }}',\n  '{{ $json.processing_run_id }}',\n  {{ $json.policy_version }},\n  '{{ $json.disposition }}',\n  '{{ $json.reason_codes_json }}'::jsonb,\n  '{{ $json.evidence_references_json }}'::jsonb,\n  {{ $json.requires_human_review }},\n  NOW()\n)\nRETURNING id AS decision_id, created_at"
+      },
+      "id": "00000000-0000-4008-0018-000000000018",
+      "name": "18 | Persist Decision",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3400, 0],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads\nSET current_disposition = '{{ $json.disposition }}', current_processing_state = CASE WHEN '{{ $json.disposition }}' = 'HUMAN_REVIEW' THEN 'AWAITING_HUMAN_REVIEW' ELSE 'ROUTING' END, updated_at = NOW()\nWHERE id = '{{ $json.lead_id }}'\nRETURNING current_processing_state, current_disposition"
+      },
+      "id": "00000000-0000-4008-0019-000000000019",
+      "name": "19 | Update Lead Disposition",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [3800, 0],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata, created_at)\nVALUES (\n  '{{ $json.correlation_id }}',\n  '{{ $json.lead_id }}',\n  'DECIDING',\n  CASE WHEN '{{ $json.disposition }}' = 'HUMAN_REVIEW' THEN 'AWAITING_HUMAN_REVIEW' ELSE 'ROUTING' END,\n  'STATE_TRANSITION',\n  'SYSTEM',\n  '{{ $json.primary_reason_code }}',\n  '{{\"disposition\": \"{{ $json.disposition }}\", \"requires_human_review\": {{ $json.requires_human_review }}}}'::jsonb,\n  NOW()\n)"
+      },
+      "id": "00000000-0000-4008-0020-000000000020",
+      "name": "20 | Log Decision Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 1,
+      "position": [4200, 0],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "decision_id",
+              "value": "={{ $json.decision_id }}"
+            },
+            {
+              "name": "disposition",
+              "value": "={{ $json.disposition }}"
+            },
+            {
+              "name": "reason_codes",
+              "value": "={{ $json.reason_codes_json }}"
+            },
+            {
+              "name": "requires_human_review",
+              "value": "={{ $json.requires_human_review }}"
+            },
+            {
+              "name": "confidence",
+              "value": "={{ $json.confidence_level }}"
+            },
+            {
+              "name": "evidence_references",
+              "value": "={{ $json.evidence_references_json }}"
+            },
+            {
+              "name": "policy_version",
+              "value": "={{ $json.policy_version }}"
+            },
+            {
+              "name": "created_at",
+              "value": "={{ $json.created_at }}"
+            },
+            {
+              "name": "output_json",
+              "value": "={{ JSON.stringify({ decision_id: $json.decision_id, disposition: $json.disposition, reason_codes: JSON.parse($json.reason_codes_json), requires_human_review: $json.requires_human_review, confidence: $json.confidence_level, evidence_references: JSON.parse($json.evidence_references_json), policy_version: parseInt($json.policy_version), created_at: $json.created_at }) }}"
+            }
+          ],
+          "number": [],
+          "boolean": []
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4008-0021-000000000021",
+      "name": "21 | Build Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [4600, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.output_json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "id": "00000000-0000-4008-0022-000000000022",
+      "name": "22 | Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [5000, 0]
+    }
+  ],
+  "connections": {
+    "01 | Receive Decision Request": {
+      "main": [
+        [
+          {
+            "node": "02 | Extract Input Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 | Extract Input Fields": {
+      "main": [
+        [
+          {
+            "node": "03 | Begin Decision & Log Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 | Begin Decision & Log Event": {
+      "main": [
+        [
+          {
+            "node": "04 | Hard Exclusion?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 | Hard Exclusion?": {
+      "main": [
+        [
+          {
+            "node": "05 | Set DISQUALIFIED (Hard Exclusion)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "06 | AI Analysis Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05 | Set DISQUALIFIED (Hard Exclusion)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06 | AI Analysis Valid?": {
+      "main": [
+        [
+          {
+            "node": "08 | Evaluate Risk Flags",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "07 | Set HUMAN_REVIEW (D-009)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "07 | Set HUMAN_REVIEW (D-009)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "08 | Evaluate Risk Flags": {
+      "main": [
+        [
+          {
+            "node": "09 | Has Security Risk Flags?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "09 | Has Security Risk Flags?": {
+      "main": [
+        [
+          {
+            "node": "10 | Set HUMAN_REVIEW (D-008)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "11 | Confidence >= MEDIUM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 | Set HUMAN_REVIEW (D-008)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 | Confidence >= MEDIUM?": {
+      "main": [
+        [
+          {
+            "node": "13 | Service Fit IN_SCOPE or PARTIAL?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "12 | Set HUMAN_REVIEW (D-007)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12 | Set HUMAN_REVIEW (D-007)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "13 | Service Fit IN_SCOPE or PARTIAL?": {
+      "main": [
+        [
+          {
+            "node": "14 | Set QUALIFIED (D-001)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "15 | Service Fit OUT_OF_SCOPE?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "14 | Set QUALIFIED (D-001)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "15 | Service Fit OUT_OF_SCOPE?": {
+      "main": [
+        [
+          {
+            "node": "16 | Set DISQUALIFIED (D-004)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "17 | Set NURTURE (D-002/D-003)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "16 | Set DISQUALIFIED (D-004)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "17 | Set NURTURE (D-002/D-003)": {
+      "main": [
+        [
+          {
+            "node": "18 | Persist Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "18 | Persist Decision": {
+      "main": [
+        [
+          {
+            "node": "19 | Update Lead Disposition",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "19 | Update Lead Disposition": {
+      "main": [
+        [
+          {
+            "node": "20 | Log Decision Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 | Log Decision Event": {
+      "main": [
+        [
+          {
+            "node": "21 | Build Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "21 | Build Output": {
+      "main": [
+        [
+          {
+            "node": "22 | Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }

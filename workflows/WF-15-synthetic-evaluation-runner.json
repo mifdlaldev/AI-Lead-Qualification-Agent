@@ -1,10 +1,483 @@
 {
-  "name": "WF-15 - synthetic-evaluation-runner",
-  "nodes": [],
-  "connections": {},
+  "name": "WF-15 - Synthetic Evaluation Runner",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "synthetic-evaluation",
+        "responseMode": "lastNode",
+        "options": {
+          "responseData": "allEntries"
+        }
+      },
+      "id": "f0000001-4f15-4000-8000-000000000001",
+      "name": "Webhook: Synthetic Eval Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "wf15-synthetic-eval"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "fixture_id",
+              "value": "={{ $json.fixture_id }}"
+            },
+            {
+              "name": "fixture_version",
+              "value": "={{ $json.fixture_version || 1 }}"
+            },
+            {
+              "name": "fixture_data",
+              "value": "={{ JSON.stringify($json.fixture_data) }}"
+            },
+            {
+              "name": "expected_disposition",
+              "value": "={{ $json.expected_disposition }}"
+            },
+            {
+              "name": "expected_reason_codes",
+              "value": "={{ JSON.stringify($json.expected_reason_codes || []) }}"
+            },
+            {
+              "name": "override_policy_version",
+              "value": "={{ $json.override_policy_version || null }}"
+            },
+            {
+              "name": "override_model",
+              "value": "={{ $json.override_model || null }}"
+            },
+            {
+              "name": "run_version",
+              "value": "={{ $json.fixture_version || 1 }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000002-4f15-4000-8000-000000000002",
+      "name": "10 | Parse Fixture Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "start_time_iso",
+              "value": "={{ $now }}"
+            },
+            {
+              "name": "start_time_epoch",
+              "value": "={{ Date.now() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000003-4f15-4000-8000-000000000003",
+      "name": "20 | Record Start Time",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": "{{WF_03_WORKFLOW_ID}}",
+        "mode": "waitForFinish",
+        "options": {
+          "workflowInputs": {
+            "values": {
+              "string": [
+                {
+                  "name": "full_name",
+                  "value": "={{ $json.fixture_data.full_name }}"
+                },
+                {
+                  "name": "email",
+                  "value": "={{ $json.fixture_data.email }}"
+                },
+                {
+                  "name": "project_description",
+                  "value": "={{ $json.fixture_data.project_description }}"
+                },
+                {
+                  "name": "company_name",
+                  "value": "={{ $json.fixture_data.company_name || '' }}"
+                },
+                {
+                  "name": "company_website",
+                  "value": "={{ $json.fixture_data.company_website || '' }}"
+                },
+                {
+                  "name": "job_title",
+                  "value": "={{ $json.fixture_data.job_title || '' }}"
+                },
+                {
+                  "name": "phone",
+                  "value": "={{ $json.fixture_data.phone || '' }}"
+                },
+                {
+                  "name": "country",
+                  "value": "={{ $json.fixture_data.country || '' }}"
+                },
+                {
+                  "name": "budget_range",
+                  "value": "={{ $json.fixture_data.budget_range || 'NOT_PROVIDED' }}"
+                },
+                {
+                  "name": "desired_timeline",
+                  "value": "={{ $json.fixture_data.desired_timeline || '' }}"
+                },
+                {
+                  "name": "service_interest",
+                  "value": "={{ $json.fixture_data.service_interest || '' }}"
+                },
+                {
+                  "name": "lead_source",
+                  "value": "={{ $json.fixture_data.lead_source || 'SYNTHETIC_EVAL' }}"
+                },
+                {
+                  "name": "utm_source",
+                  "value": "={{ $json.fixture_data.utm_source || '' }}"
+                },
+                {
+                  "name": "utm_medium",
+                  "value": "={{ $json.fixture_data.utm_medium || '' }}"
+                },
+                {
+                  "name": "utm_campaign",
+                  "value": "={{ $json.fixture_data.utm_campaign || '' }}"
+                },
+                {
+                  "name": "utm_term",
+                  "value": "={{ $json.fixture_data.utm_term || '' }}"
+                },
+                {
+                  "name": "utm_content",
+                  "value": "={{ $json.fixture_data.utm_content || '' }}"
+                }
+              ],
+              "boolean": [
+                {
+                  "name": "consent_to_contact",
+                  "value": "={{ $json.fixture_data.consent_to_contact !== undefined ? $json.fixture_data.consent_to_contact : true }}"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "id": "f0000004-4f15-4000-8000-000000000004",
+      "name": "30 | Execute WF-03 Lead Orchestrator",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "observed_disposition",
+              "value": "={{ $json.current_disposition }}"
+            },
+            {
+              "name": "observed_reason_codes",
+              "value": "={{ JSON.stringify($json.reason_codes || []) }}"
+            },
+            {
+              "name": "observed_processing_state",
+              "value": "={{ $json.current_processing_state }}"
+            },
+            {
+              "name": "observed_processing_run_id",
+              "value": "={{ $json.processing_run_id || '' }}"
+            },
+            {
+              "name": "observed_correlation_id",
+              "value": "={{ $json.correlation_id || '' }}"
+            },
+            {
+              "name": "observed_decision_id",
+              "value": "={{ $json.decision_id || '' }}"
+            },
+            {
+              "name": "observed_analysis_id",
+              "value": "={{ $json.analysis_id || '' }}"
+            },
+            {
+              "name": "observed_requires_human_review",
+              "value": "={{ $json.requires_human_review || false }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000005-4f15-4000-8000-000000000005",
+      "name": "40 | Extract Observed Outputs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "expected_disposition",
+              "value": "={{ $('10 | Parse Fixture Input').first().json.expected_disposition }}"
+            },
+            {
+              "name": "expected_reason_codes_str",
+              "value": "={{ $('10 | Parse Fixture Input').first().json.expected_reason_codes }}"
+            },
+            {
+              "name": "observed_disposition",
+              "value": "={{ $('40 | Extract Observed Outputs').first().json.observed_disposition }}"
+            },
+            {
+              "name": "observed_reason_codes_str",
+              "value": "={{ $('40 | Extract Observed Outputs').first().json.observed_reason_codes }}"
+            },
+            {
+              "name": "disposition_match",
+              "value": "={{ $json.observed_disposition === $json.expected_disposition }}"
+            },
+            {
+              "name": "reason_codes_match",
+              "value": "={{ $json.observed_reason_codes_str === $json.expected_reason_codes_str }}"
+            },
+            {
+              "name": "overall_match",
+              "value": "={{ $json.disposition_match && $json.reason_codes_match }}"
+            },
+            {
+              "name": "mismatches_json",
+              "value": "={{ (function() { var m = []; if (!$json.disposition_match) { m.push({ field: 'disposition', expected: $json.expected_disposition, observed: $json.observed_disposition }); } if (!$json.reason_codes_match) { m.push({ field: 'reason_codes', expected: JSON.parse($json.expected_reason_codes_str || '[]'), observed: JSON.parse($json.observed_reason_codes_str || '[]') }); } return JSON.stringify(m); })() }}"
+            },
+            {
+              "name": "fixture_id",
+              "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_id }}"
+            },
+            {
+              "name": "fixture_version",
+              "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_version }}"
+            },
+            {
+              "name": "lead_id",
+              "value": "={{ $('40 | Extract Observed Outputs').first().json.lead_id || '' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000006-4f15-4000-8000-000000000006",
+      "name": "50 | Compare Expected vs Observed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "end_time_iso",
+              "value": "={{ $now }}"
+            },
+            {
+              "name": "end_time_epoch",
+              "value": "={{ Date.now() }}"
+            },
+            {
+              "name": "run_duration_ms",
+              "value": "={{ Date.now() - parseInt($('20 | Record Start Time').first().json.start_time_epoch) }}"
+            },
+            {
+              "name": "executed_at",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000007-4f15-4000-8000-000000000007",
+      "name": "60 | Record End Time & Duration",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata) VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb) RETURNING id",
+        "additionalFields": {
+          "queryParams": "={{ $json.observed_correlation_id }},{{ $json.lead_id || null }},SYNTHETIC_EVAL,EVAL_COMPLETED,EVALUATION_RUN,SYSTEM,EVAL-001,{{ JSON.stringify({ fixture_id: $json.fixture_id, fixture_version: $json.fixture_version, expected_disposition: $json.expected_disposition, observed_disposition: $json.observed_disposition, disposition_match: $json.disposition_match, reason_codes_match: $json.reason_codes_match, overall_match: $json.overall_match, run_duration_ms: $json.run_duration_ms, observed_processing_state: $json.observed_processing_state, observed_processing_run_id: $json.observed_processing_run_id, observed_decision_id: $json.observed_decision_id, observed_analysis_id: $json.observed_analysis_id }) }}"
+        }
+      },
+      "id": "f0000008-4f15-4000-8000-000000000008",
+      "name": "70 | Log Evaluation Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1650, 300],
+      "credentials": {
+        "postgres": "Postgres"
+      }
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "run_id",
+              "value": "={{ $json.id || $('70 | Log Evaluation Event').first().json.id }}"
+            },
+            {
+              "name": "fixture_id",
+              "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_id }}"
+            },
+            {
+              "name": "run_version",
+              "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_version }}"
+            },
+            {
+              "name": "observed",
+              "value": "={{ JSON.stringify({ disposition: $('40 | Extract Observed Outputs').first().json.observed_disposition, reason_codes: JSON.parse($('40 | Extract Observed Outputs').first().json.observed_reason_codes || '[]'), processing_state: $('40 | Extract Observed Outputs').first().json.observed_processing_state }) }}"
+            },
+            {
+              "name": "expected",
+              "value": "={{ JSON.stringify({ disposition: $('10 | Parse Fixture Input').first().json.expected_disposition, reason_codes: JSON.parse($('10 | Parse Fixture Input').first().json.expected_reason_codes || '[]') }) }}"
+            },
+            {
+              "name": "match",
+              "value": "={{ $('50 | Compare Expected vs Observed').first().json.overall_match }}"
+            },
+            {
+              "name": "mismatches",
+              "value": "={{ $('50 | Compare Expected vs Observed').first().json.mismatches_json }}"
+            },
+            {
+              "name": "evidence",
+              "value": "={{ JSON.stringify({ decision_id: $('40 | Extract Observed Outputs').first().json.observed_decision_id, analysis_id: $('40 | Extract Observed Outputs').first().json.observed_analysis_id, processing_run_id: $('40 | Extract Observed Outputs').first().json.observed_processing_run_id, correlation_id: $('40 | Extract Observed Outputs').first().json.observed_correlation_id }) }}"
+            },
+            {
+              "name": "run_duration_ms",
+              "value": "={{ $('60 | Record End Time & Duration').first().json.run_duration_ms }}"
+            },
+            {
+              "name": "executed_at",
+              "value": "={{ $('60 | Record End Time & Duration').first().json.executed_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f0000009-4f15-4000-8000-000000000009",
+      "name": "80 | Respond to Webhook",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3,
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Webhook: Synthetic Eval Trigger": {
+      "main": [
+        [
+          {
+            "node": "10 | Parse Fixture Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 | Parse Fixture Input": {
+      "main": [
+        [
+          {
+            "node": "20 | Record Start Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 | Record Start Time": {
+      "main": [
+        [
+          {
+            "node": "30 | Execute WF-03 Lead Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "30 | Execute WF-03 Lead Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "40 | Extract Observed Outputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "40 | Extract Observed Outputs": {
+      "main": [
+        [
+          {
+            "node": "50 | Compare Expected vs Observed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "50 | Compare Expected vs Observed": {
+      "main": [
+        [
+          {
+            "node": "60 | Record End Time & Duration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "60 | Record End Time & Duration": {
+      "main": [
+        [
+          {
+            "node": "70 | Log Evaluation Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "70 | Log Evaluation Event": {
+      "main": [
+        [
+          {
+            "node": "80 | Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
   "settings": {
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "0.0.0-placeholder",
+  "versionId": "1.0.0",
   "staticData": null
 }
