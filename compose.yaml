@@ -1,0 +1,56 @@
+# ============================================
+# AI Lead Qualification Agent — Docker Compose
+# ============================================
+# n8n 2.30.4 (pinned) + PostgreSQL
+#
+# Usage:
+#   1. Copy .env.example to .env and fill in real values
+#   2. docker compose up -d
+#   3. Access n8n at http://localhost:5678
+# ============================================
+
+services:
+  n8n:
+    image: n8nio/n8n:2.30.4
+    container_name: n8n-lead-qualification
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=${N8N_PORT:-5678}
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_USER_MANAGEMENT_DISABLED=${N8N_USER_MANAGEMENT_DISABLED:-true}
+      # n8n internal database via PostgreSQL
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${PG_N8N_HOST}
+      - DB_POSTGRESDB_PORT=${PG_N8N_PORT:-5432}
+      - DB_POSTGRESDB_DATABASE=${PG_N8N_DATABASE}
+      - DB_POSTGRESDB_SCHEMA=${PG_N8N_SCHEMA:-n8n}
+      - DB_POSTGRESDB_USER=${PG_N8N_USER}
+      - DB_POSTGRESDB_PASSWORD=${PG_N8N_PASSWORD}
+      - DB_POSTGRESDB_SSL_ENABLED=${PG_N8N_SSL_MODE:-require}
+      # External service credentials (passed as n8n credential via env)
+      - AI_PROVIDER=${AI_PROVIDER}
+      - AI_API_KEY=${AI_API_KEY}
+      - AI_BASE_URL=${AI_BASE_URL}
+      - OPENAI_MODEL=${OPENAI_MODEL}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM=${EMAIL_FROM}
+      - PG_APP_HOST=${PG_APP_HOST}
+      - PG_APP_PORT=${PG_APP_PORT}
+      - PG_APP_DATABASE=${PG_APP_DATABASE}
+      - PG_APP_USER=${PG_APP_USER}
+      - PG_APP_PASSWORD=${PG_APP_PASSWORD}
+      - PG_APP_SSL_MODE=${PG_APP_SSL_MODE:-require}
+      - REVIEW_TOKEN_TTL_SECONDS=${REVIEW_TOKEN_TTL_SECONDS:-86400}
+      - REVIEW_TOKEN_SECRET=${REVIEW_TOKEN_SECRET}
+    volumes:
+      - n8n_data:/home/node/.n8n
+
+volumes:
+  n8n_data:
+    driver: local

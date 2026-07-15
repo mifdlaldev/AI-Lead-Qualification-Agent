@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/schemas/reason-codes-v1",
+  "title": "Reason Code Registry v1",
+  "description": "Machine-readable registry of all reason codes used in validation, qualification, and decisioning.",
+  "codes": {
+    "validation": {
+      "V-001": { "code": "V-001", "label": "MISSING_REQUIRED_FIELD", "category": "INVALID_TERMINAL" },
+      "V-002": { "code": "V-002", "label": "INVALID_EMAIL_FORMAT", "category": "INVALID_REVIEWABLE" },
+      "V-003": { "code": "V-003", "label": "EMPTY_PROJECT_DESCRIPTION", "category": "INVALID_TERMINAL" },
+      "V-004": { "code": "V-004", "label": "NAME_TOO_SHORT", "category": "INVALID_REVIEWABLE" },
+      "V-010": { "code": "V-010", "label": "VALID", "category": "VALID" }
+    },
+    "idempotency": {
+      "I-001": { "code": "I-001", "label": "NEW_SUBMISSION", "category": "NEW" },
+      "I-002": { "code": "I-002", "label": "EXACT_DUPLICATE", "category": "DUPLICATE" },
+      "I-003": { "code": "I-003", "label": "FINGERPRINT_MATCH", "category": "DUPLICATE" },
+      "I-004": { "code": "I-004", "label": "REPLAY_CONFLICT", "category": "REPLAY_CONFLICT" }
+    },
+    "prequalification": {
+      "P-001": { "code": "P-001", "label": "CONSENT_REQUIRED", "category": "BLOCKED" },
+      "P-002": { "code": "P-002", "label": "NO_CONSENT", "category": "BLOCKED" },
+      "P-003": { "code": "P-003", "label": "EXCLUDED_SERVICE", "category": "DISQUALIFIED" },
+      "P-004": { "code": "P-004", "label": "PASSED_PREQUALIFICATION", "category": "PROCEED" },
+      "P-005": { "code": "P-005", "label": "AI_ANALYSIS_REQUIRED", "category": "PROCEED" }
+    },
+    "ai_analysis": {
+      "A-001": { "code": "A-001", "label": "ANALYSIS_SUCCESS", "category": "SUCCESS" },
+      "A-002": { "code": "A-002", "label": "SCHEMA_VALIDATION_FAILED", "category": "FAILURE" },
+      "A-003": { "code": "A-003", "label": "API_ERROR", "category": "FAILURE" },
+      "A-004": { "code": "A-004", "label": "TIMEOUT", "category": "FAILURE" },
+      "A-005": { "code": "A-005", "label": "RATE_LIMITED", "category": "FAILURE" }
+    },
+    "decision": {
+      "D-001": { "code": "D-001", "label": "QUALIFIED_ALL_CRITERIA_MET", "category": "QUALIFIED" },
+      "D-002": { "code": "D-002", "label": "NURTURE_MISSING_INFO", "category": "NURTURE" },
+      "D-003": { "code": "D-003", "label": "NURTURE_WEAK_INTENT", "category": "NURTURE" },
+      "D-004": { "code": "D-004", "label": "DISQUALIFIED_OUT_OF_SCOPE", "category": "DISQUALIFIED" },
+      "D-005": { "code": "D-005", "label": "DISQUALIFIED_EXCLUDED_SERVICE", "category": "DISQUALIFIED" },
+      "D-006": { "code": "D-006", "label": "HUMAN_REVIEW_AMBIGUITY", "category": "HUMAN_REVIEW" },
+      "D-007": { "code": "D-007", "label": "HUMAN_REVIEW_LOW_CONFIDENCE", "category": "HUMAN_REVIEW" },
+      "D-008": { "code": "D-008", "label": "HUMAN_REVIEW_PROMPT_INJECTION", "category": "HUMAN_REVIEW" },
+      "D-009": { "code": "D-009", "label": "HUMAN_REVIEW_AI_FAILURE", "category": "HUMAN_REVIEW" }
+    },
+    "human_review": {
+      "H-001": { "code": "H-001", "label": "REVIEW_CREATED", "category": "OPEN" },
+      "H-002": { "code": "H-002", "label": "REVIEW_RESOLVED_QUALIFIED", "category": "RESOLVED" },
+      "H-003": { "code": "H-003", "label": "REVIEW_RESOLVED_NURTURE", "category": "RESOLVED" },
+      "H-004": { "code": "H-004", "label": "REVIEW_RESOLVED_DISQUALIFIED", "category": "RESOLVED" },
+      "H-005": { "code": "H-005", "label": "REVIEW_TOKEN_EXPIRED", "category": "ERROR" },
+      "H-006": { "code": "H-006", "label": "REVIEW_ALREADY_RESOLVED", "category": "ERROR" },
+      "H-007": { "code": "H-007", "label": "REVIEW_UNAUTHORIZED", "category": "ERROR" }
+    },
+    "side_effects": {
+      "S-001": { "code": "S-001", "label": "TELEGRAM_SENT", "category": "SUCCESS" },
+      "S-002": { "code": "S-002", "label": "TELEGRAM_FAILED", "category": "FAILURE" },
+      "S-003": { "code": "S-003", "label": "EMAIL_SENT", "category": "SUCCESS" },
+      "S-004": { "code": "S-004", "label": "EMAIL_FAILED", "category": "FAILURE" },
+      "S-005": { "code": "S-005", "label": "EMAIL_SKIPPED_NO_CONSENT", "category": "SKIPPED" },
+      "S-006": { "code": "S-006", "label": "ACTION_KEY_ALREADY_CLAIMED", "category": "DUPLICATE" }
+    },
+    "system": {
+      "E-001": { "code": "E-001", "label": "UNEXPECTED_ERROR", "category": "FAILURE" },
+      "E-002": { "code": "E-002", "label": "DB_CONNECTION_ERROR", "category": "FAILURE" },
+      "E-003": { "code": "E-003", "label": "RETRY_EXHAUSTED", "category": "FAILURE" },
+      "E-004": { "code": "E-004", "label": "WORKFLOW_TIMEOUT", "category": "FAILURE" }
+    }
+  }
+}

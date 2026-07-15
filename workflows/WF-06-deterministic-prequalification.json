@@ -1,0 +1,10 @@
+{
+  "name": "WF-06 - deterministic-prequalification",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0.0.0-placeholder",
+  "staticData": null
+}

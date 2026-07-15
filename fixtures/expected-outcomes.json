@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/fixtures/expected-outcomes-v1",
+  "title": "Expected Outcomes Registry",
+  "description": "Frozen expected outcomes for synthetic evaluation fixtures. Each fixture maps to an expected disposition and reason codes.",
+  "version": 1,
+  "fixtures": []
+}

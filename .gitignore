@@ -1,0 +1,53 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# n8n
+n8n-storage/
+n8n-credentials/
+.n8n/
+
+# Docker
+docker-compose.override.yml
+
+# Database
+*.sqlite
+*.sqlite3
+pgdata/
+
+# Node / dependencies
+node_modules/
+package-lock.json
+
+# IDE & editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Evidence (generated outputs)
+evidence/*.json
+!evidence/.gitkeep
+!evidence/README.md
+
+# Sensitive exports
+*-credentials.json
+*-secrets.json
+*_with_credentials.json
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/.codegraph
+.omo/

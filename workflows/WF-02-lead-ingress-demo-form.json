@@ -1,0 +1,10 @@
+{
+  "name": "WF-02 - lead-ingress-demo-form",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0.0.0-placeholder",
+  "staticData": null
+}

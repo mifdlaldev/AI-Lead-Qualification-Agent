@@ -1,0 +1,10 @@
+{
+  "name": "WF-07 - ai-semantic-analysis",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0.0.0-placeholder",
+  "staticData": null
+}

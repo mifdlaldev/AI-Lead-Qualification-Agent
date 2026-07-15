@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/schemas/inbound-lead-v1",
+  "title": "Inbound Lead Submission v1",
+  "description": "Canonical inbound contract for lead submissions. All ingress paths (API, Form) must produce this shape.",
+  "type": "object",
+  "required": [
+    "full_name",
+    "email",
+    "project_description",
+    "consent_to_contact"
+  ],
+  "properties": {
+    "submission_id": {
+      "type": "string",
+      "description": "Source-provided unique ID; generated at ingress if absent"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 timestamp assigned or normalized at ingress"
+    },
+    "full_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Non-empty human-readable name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Syntactically valid email address"
+    },
+    "project_description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Non-empty free text describing the request"
+    },
+    "consent_to_contact": {
+      "type": "boolean",
+      "description": "Must be true before automated prospect follow-up"
+    },
+    "company_name": {
+      "type": "string"
+    },
+    "company_website": {
+      "type": "string",
+      "format": "uri"
+    },
+    "job_title": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "budget_range": {
+      "type": "string",
+      "enum": [
+        "UNDER_1K",
+        "1K_5K",
+        "5K_15K",
+        "15K_50K",
+        "OVER_50K",
+        "NOT_PROVIDED"
+      ]
+    },
+    "desired_timeline": {
+      "type": "string"
+    },
+    "service_interest": {
+      "type": "string",
+      "description": "Source-provided category if present"
+    },
+    "lead_source": {
+      "type": "string"
+    },
+    "utm_source": {
+      "type": "string"
+    },
+    "utm_medium": {
+      "type": "string"
+    },
+    "utm_campaign": {
+      "type": "string"
+    },
+    "utm_term": {
+      "type": "string"
+    },
+    "utm_content": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

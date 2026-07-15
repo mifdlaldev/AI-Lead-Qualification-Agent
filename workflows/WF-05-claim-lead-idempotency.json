@@ -1,0 +1,10 @@
+{
+  "name": "WF-05 - claim-lead-idempotency",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0.0.0-placeholder",
+  "staticData": null
+}

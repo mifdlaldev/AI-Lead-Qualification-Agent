@@ -1,0 +1,10 @@
+{
+  "name": "WF-15 - synthetic-evaluation-runner",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0.0.0-placeholder",
+  "staticData": null
+}

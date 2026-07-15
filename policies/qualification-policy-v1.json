@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/policies/qualification-policy-v1",
+  "title": "Qualification Policy v1",
+  "description": "Machine-readable qualification policy. Deterministic policy evaluation for lead disposition.",
+  "version": 1,
+  "decision_hierarchy": [
+    "contract_validity",
+    "duplicate_idempotency",
+    "hard_exclusion_rules",
+    "semantic_evidence",
+    "confidence_threshold",
+    "uncertainty_gate",
+    "business_disposition"
+  ],
+  "hard_rules": {
+    "HR-001": {
+      "rule": "Contactability",
+      "condition": "required_contact_data_invalid",
+      "action": "route_to_invalid"
+    },
+    "HR-002": {
+      "rule": "Consent",
+      "condition": "consent_to_contact != true",
+      "action": "block_automated_followup"
+    },
+    "HR-003": {
+      "rule": "Duplicate safety",
+      "condition": "confirmed_replay_or_duplicate",
+      "action": "block_duplicate_side_effects"
+    },
+    "HR-004": {
+      "rule": "Out of scope",
+      "condition": "matches_excluded_service_list",
+      "action": "DISQUALIFIED"
+    },
+    "HR-005": {
+      "rule": "Untrusted content",
+      "condition": "instructions_in_prospect_text",
+      "action": "ignore_as_policy_input"
+    }
+  },
+  "dispositions": {
+    "QUALIFIED": {
+      "conditions": [
+        "contract_valid",
+        "not_duplicate",
+        "no_hard_exclusion",
+        "service_fit IN [IN_SCOPE, PARTIAL]",
+        "no_high_risk_ambiguity",
+        "confidence >= medium"
+      ],
+      "side_effects": [
+        "persist_canonical_record",
+        "send_internal_telegram_alert",
+        "send_prospect_email_if_consent"
+      ]
+    },
+    "NURTURE": {
+      "conditions": [
+        "not_disqualified",
+        "insufficient_for_qualified",
+        "not_high_risk"
+      ],
+      "side_effects": [
+        "persist_canonical_record",
+        "route_to_nurture_path",
+        "request_missing_info_if_configured"
+      ]
+    },
+    "DISQUALIFIED": {
+      "conditions": [
+        "hard_exclusion_applies",
+        "OR service_fit == OUT_OF_SCOPE with confidence >= medium"
+      ],
+      "side_effects": [
+        "persist_decision",
+        "optional_polite_response_if_consent"
+      ]
+    },
+    "HUMAN_REVIEW": {
+      "triggers": [
+        "malformed_ai_output",
+        "critical_evidence_conflict",
+        "confidence < medium",
+        "risk_flags contains PROMPT_INJECTION_SUSPECTED",
+        "risk_flags contains ADVERSARIAL_CONTENT",
+        "valuable_but_ambiguous"
+      ],
+      "side_effects": [
+        "persist_automated_evidence",
+        "create_review_task",
+        "block_final_disposition_actions"
+      ]
+    }
+  },
+  "confidence_thresholds": {
+    "min_for_qualified": "MEDIUM",
+    "min_for_disqualified": "MEDIUM",
+    "below_threshold_action": "HUMAN_REVIEW"
+  },
+  "human_override": {
+    "allowed": true,
+    "records_required": [
+      "previous_automated_recommendation",
+      "final_human_disposition",
+      "reason_code",
+      "reviewer_identity",
+      "timestamp"
+    ],
+    "auto_retrain": false
+  }
+}

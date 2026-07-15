@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/schemas/semantic-analysis-v1",
+  "title": "AI Semantic Analysis Output v1",
+  "description": "Bounded structured output contract for AI semantic analysis. AI output must validate against this schema before policy evaluation.",
+  "type": "object",
+  "required": [
+    "summary",
+    "detected_need",
+    "service_fit",
+    "intent_signal",
+    "urgency_signal",
+    "budget_signal",
+    "decision_relevant_facts",
+    "missing_information",
+    "risk_flags",
+    "confidence"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Concise neutral summary of the project request"
+    },
+    "detected_need": {
+      "type": "string",
+      "description": "Controlled category or 'UNKNOWN'"
+    },
+    "service_fit": {
+      "type": "string",
+      "enum": ["IN_SCOPE", "PARTIAL", "OUT_OF_SCOPE", "UNKNOWN"],
+      "description": "Fit against the reference service taxonomy"
+    },
+    "intent_signal": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW", "UNKNOWN"],
+      "description": "Strength of purchase/buying intent"
+    },
+    "urgency_signal": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW", "UNKNOWN"],
+      "description": "Stated or implied urgency"
+    },
+    "budget_signal": {
+      "type": "string",
+      "enum": ["EXPLICIT_FIT", "EXPLICIT_MISMATCH", "NOT_PROVIDED", "AMBIGUOUS"],
+      "description": "Budget information extracted from the submission"
+    },
+    "decision_relevant_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["fact", "source"],
+        "properties": {
+          "fact": { "type": "string" },
+          "source": { "type": "string", "description": "Reference to the specific part of the submission" }
+        },
+        "additionalProperties": false
+      },
+      "description": "Structured facts grounded in the submission"
+    },
+    "missing_information": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of decision-relevant information not provided"
+    },
+    "risk_flags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "PROMPT_INJECTION_SUSPECTED",
+          "ADVERSARIAL_CONTENT",
+          "CONTRADICTORY_SIGNALS",
+          "MISSING_CRITICAL_INFO",
+          "UNUSUAL_REQUEST"
+        ]
+      },
+      "description": "Controlled list of risk flags"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["HIGH", "MEDIUM", "LOW", "UNKNOWN"],
+      "description": "AI confidence in the overall analysis"
+    }
+  },
+  "additionalProperties": false
+}

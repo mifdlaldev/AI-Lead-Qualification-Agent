@@ -1,0 +1,10 @@
+{
+  "name": "WF-13 - resolve-human-review",
+  "nodes": [],
+  "connections": {},
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "0.0.0-placeholder",
+  "staticData": null
+}
