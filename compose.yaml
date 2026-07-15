@@ -30,7 +30,7 @@ services:
       - DB_POSTGRESDB_SCHEMA=${PG_N8N_SCHEMA:-n8n}
       - DB_POSTGRESDB_USER=${PG_N8N_USER}
       - DB_POSTGRESDB_PASSWORD=${PG_N8N_PASSWORD}
-      - DB_POSTGRESDB_SSL_ENABLED=${PG_N8N_SSL_MODE:-require}
+      - DB_POSTGRESDB_SSL_ENABLED=${PG_N8N_SSL_MODE:-true}
       # External service credentials (passed as n8n credential via env)
       - AI_PROVIDER=${AI_PROVIDER}
       - AI_API_KEY=${AI_API_KEY}
