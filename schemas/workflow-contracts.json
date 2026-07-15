@@ -1,0 +1,526 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/schemas/workflow-contracts-v1",
+  "title": "Workflow Input/Output Contracts v1",
+  "description": "Machine-readable I/O contracts for all 15 workflows. Each workflow has a defined input and output schema that must be satisfied for contract compliance.",
+  "version": 1,
+  "contracts": {
+    "WF-01": {
+      "name": "API Ingress",
+      "description": "Accepts lead submissions via REST API webhook. Validates the inbound contract, assigns correlation_id, and persists receipt.",
+      "input": {
+        "$ref": "../schemas/inbound-lead-v1.schema.json"
+      },
+      "output": {
+        "type": "object",
+        "required": ["correlation_id", "lead_id", "source_system", "received_at"],
+        "properties": {
+          "correlation_id": { "type": "string", "format": "uuid", "description": "Unique processing trace ID" },
+          "lead_id": { "type": "string", "format": "uuid", "description": "Canonical lead record ID" },
+          "source_system": { "type": "string", "enum": ["API", "FORM", "IMPORT"], "description": "Ingress source" },
+          "received_at": { "type": "string", "format": "date-time", "description": "ISO-8601 receipt timestamp" },
+          "submission_id": { "type": "string", "description": "Source-provided ID if supplied" },
+          "schema_version": { "type": "integer", "description": "Inbound schema version used" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-02": {
+      "name": "Form Ingress",
+      "description": "Accepts lead submissions via HTML form. Same contract as API ingress, different transport.",
+      "input": {
+        "$ref": "../schemas/inbound-lead-v1.schema.json"
+      },
+      "output": {
+        "$ref": "#/contracts/WF-01/output"
+      }
+    },
+    "WF-03": {
+      "name": "Core Orchestrator",
+      "description": "Lifecycle coordinator. Delegates to specialized modules and owns state progression.",
+      "input": {
+        "$ref": "#/contracts/WF-01/output"
+      },
+      "output": {
+        "type": "object",
+        "required": ["correlation_id", "lead_id", "current_processing_state", "current_disposition"],
+        "properties": {
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "lead_id": { "type": "string", "format": "uuid" },
+          "current_processing_state": { "type": "string", "description": "Final processing state after orchestration" },
+          "current_disposition": { "type": "string", "enum": ["QUALIFIED", "NURTURE", "DISQUALIFIED", "HUMAN_REVIEW", "NONE", "ERROR"], "description": "Business disposition" },
+          "reason_codes": { "type": "array", "items": { "type": "string" }, "description": "Accumulated reason codes from all modules" },
+          "processing_run_id": { "type": "string", "format": "uuid" },
+          "requires_human_review": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-04": {
+      "name": "Validation & Normalization",
+      "description": "Pure/deterministic validation of required fields and normalized data. Produces validation reason codes.",
+      "input": {
+        "$ref": "../schemas/inbound-lead-v1.schema.json"
+      },
+      "output": {
+        "type": "object",
+        "required": ["is_valid", "reason_codes", "normalized_lead"],
+        "properties": {
+          "is_valid": { "type": "boolean", "description": "Whether the submission passes validation" },
+          "reason_codes": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^V-\\d{3}$" },
+            "description": "Validation reason codes (V-001 to V-010)"
+          },
+          "normalized_lead": {
+            "type": "object",
+            "required": ["full_name", "email", "project_description", "consent_to_contact"],
+            "properties": {
+              "full_name": { "type": "string" },
+              "email": { "type": "string", "format": "email" },
+              "project_description": { "type": "string" },
+              "consent_to_contact": { "type": "boolean" },
+              "company_name": { "type": "string" },
+              "company_website": { "type": "string" },
+              "job_title": { "type": "string" },
+              "phone": { "type": "string" },
+              "country": { "type": "string" },
+              "budget_range": { "type": "string" },
+              "desired_timeline": { "type": "string" },
+              "service_interest": { "type": "string" },
+              "lead_source": { "type": "string" },
+              "utm_source": { "type": "string" },
+              "utm_medium": { "type": "string" },
+              "utm_campaign": { "type": "string" },
+              "utm_term": { "type": "string" },
+              "utm_content": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "recoverability": { "type": "string", "enum": ["TERMINAL", "REVIEWABLE", "VALID"], "description": "Whether the invalid submission can be recovered" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-05": {
+      "name": "Idempotency & Duplicate Control",
+      "description": "Uses durable idempotency records and documented duplicate signals. Prevents replayed events from repeating prohibited side effects.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "correlation_id", "payload_fingerprint", "source_submission_id"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "payload_fingerprint": { "type": "string", "description": "Deterministic fingerprint of the submission payload" },
+          "source_submission_id": { "type": "string", "description": "Source-provided unique ID" },
+          "source_system": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["is_duplicate", "reason_code", "action"],
+        "properties": {
+          "is_duplicate": { "type": "boolean" },
+          "reason_code": { "type": "string", "pattern": "^I-\\d{3}$", "description": "Idempotency reason code (I-001 to I-004)" },
+          "action": { "type": "string", "enum": ["PROCEED", "BLOCK", "REPLAY_RECORD"], "description": "Action to take for this submission" },
+          "existing_lead_id": { "type": "string", "format": "uuid", "description": "If duplicate, the ID of the existing lead" },
+          "existing_correlation_id": { "type": "string", "format": "uuid", "description": "If duplicate, the correlation ID of the original processing" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-06": {
+      "name": "Deterministic Prequalification",
+      "description": "Evaluates hard rules: consent, excluded services, contactability. Determines whether AI analysis is even necessary.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "normalized_lead", "policy_version"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "normalized_lead": { "$ref": "#/contracts/WF-04/output/properties/normalized_lead" },
+          "policy_version": { "type": "integer", "default": 1 },
+          "is_valid": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["passed", "reason_codes", "requires_ai_analysis"],
+        "properties": {
+          "passed": { "type": "boolean", "description": "Whether the lead passes all prequalification hard rules" },
+          "reason_codes": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^P-\\d{3}$" },
+            "description": "Prequalification reason codes (P-001 to P-005)"
+          },
+          "requires_ai_analysis": { "type": "boolean", "description": "Whether AI analysis is needed (false if terminal rule already resolved)" },
+          "blocked_actions": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["AUTOMATED_FOLLOWUP", "PROSPECT_EMAIL", "ALL_SIDE_EFFECTS"] },
+            "description": "Actions blocked by deterministic rules"
+          },
+          "disposition_if_terminal": { "type": "string", "enum": ["DISQUALIFIED", "NONE"], "description": "Disposition if a terminal rule applies" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-07": {
+      "name": "AI Semantic Analysis",
+      "description": "Sends normalized lead fields to AI for semantic extraction. Validates the response against the semantic-analysis-v1 schema.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "correlation_id", "analysis_payload", "prompt_version", "analysis_schema_version"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "analysis_payload": {
+            "type": "object",
+            "required": ["full_name", "project_description"],
+            "properties": {
+              "full_name": { "type": "string" },
+              "project_description": { "type": "string" },
+              "company_name": { "type": "string" },
+              "job_title": { "type": "string" },
+              "budget_range": { "type": "string" },
+              "desired_timeline": { "type": "string" },
+              "service_interest": { "type": "string" },
+              "country": { "type": "string" }
+            },
+            "additionalProperties": false,
+            "description": "Minimum necessary fields sent to AI. Free text treated as untrusted data."
+          },
+          "prompt_version": { "type": "integer", "default": 1 },
+          "analysis_schema_version": { "type": "integer", "default": 1 },
+          "model": { "type": "string", "description": "Requested model identifier" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 1 }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["processing_run_id", "analysis_result", "validation_status"],
+        "properties": {
+          "processing_run_id": { "type": "string", "format": "uuid" },
+          "analysis_result": {
+            "$ref": "../schemas/semantic-analysis-v1.schema.json"
+          },
+          "validation_status": {
+            "type": "string",
+            "enum": ["VALID", "MALFORMED", "FAILED"],
+            "description": "Whether the AI output passed schema validation"
+          },
+          "model_provider": { "type": "string", "description": "Observed model provider" },
+          "model_identifier": { "type": "string", "description": "Observed model ID from response" },
+          "usage_metadata": {
+            "type": "object",
+            "properties": {
+              "prompt_tokens": { "type": "integer" },
+              "completion_tokens": { "type": "integer" },
+              "total_tokens": { "type": "integer" }
+            },
+            "description": "Token usage metadata when returned by provider"
+          },
+          "reason_code": { "type": "string", "pattern": "^A-\\d{3}$", "description": "AI analysis reason code (A-001 to A-005)" },
+          "analysis_schema_version": { "type": "integer" },
+          "prompt_version": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-08": {
+      "name": "Qualification Decision",
+      "description": "Deterministically maps validated evidence (prequalification + AI analysis) to disposition, reason codes, and review requirement.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "correlation_id", "prequalification_result", "policy_version"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "prequalification_result": { "$ref": "#/contracts/WF-06/output" },
+          "ai_analysis_result": { "$ref": "#/contracts/WF-07/output" },
+          "policy_version": { "type": "integer", "default": 1 },
+          "normalized_lead": { "$ref": "#/contracts/WF-04/output/properties/normalized_lead" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["disposition", "reason_codes", "requires_human_review", "decision_id"],
+        "properties": {
+          "decision_id": { "type": "string", "format": "uuid" },
+          "disposition": {
+            "type": "string",
+            "enum": ["QUALIFIED", "NURTURE", "DISQUALIFIED", "HUMAN_REVIEW"],
+            "description": "Final automated disposition"
+          },
+          "reason_codes": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^D-\\d{3}$" },
+            "description": "Decision reason codes (D-001 to D-009)"
+          },
+          "requires_human_review": { "type": "boolean" },
+          "confidence": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] },
+          "evidence_references": {
+            "type": "array",
+            "items": { "type": "object", "properties": { "type": { "type": "string" }, "id": { "type": "string" } } },
+            "description": "References to supporting evidence (analysis, prequal, etc.)"
+          },
+          "policy_version": { "type": "integer" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-09": {
+      "name": "Human Review Creation",
+      "description": "Creates a review item when the automated decision requires human review. Generates a time-limited review token.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "decision_id", "automated_recommendation", "review_reason_codes"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "decision_id": { "type": "string", "format": "uuid" },
+          "automated_recommendation": { "type": "string", "description": "The automated recommendation being reviewed" },
+          "review_reason_codes": { "type": "array", "items": { "type": "string" }, "description": "Why this needed human review" },
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "token_ttl_hours": { "type": "integer", "default": 72, "description": "Hours until review token expires" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["review_id", "review_token_hash", "review_token_expires_at", "status"],
+        "properties": {
+          "review_id": { "type": "string", "format": "uuid" },
+          "review_token_hash": { "type": "string", "description": "SHA-256 hash of the review token" },
+          "review_token_expires_at": { "type": "string", "format": "date-time" },
+          "status": { "type": "string", "enum": ["OPEN"] },
+          "reason_code": { "type": "string", "pattern": "^H-\\d{3}$", "description": "H-001 REVIEW_CREATED" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-10": {
+      "name": "Routing & Persistence",
+      "description": "Executes only actions permitted by final disposition, consent, and idempotency policy. Each external action receives its own idempotency/action key.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "correlation_id", "disposition", "reason_codes"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "disposition": { "type": "string", "enum": ["QUALIFIED", "NURTURE", "DISQUALIFIED", "HUMAN_REVIEW"] },
+          "reason_codes": { "type": "array", "items": { "type": "string" } },
+          "consent_to_contact": { "type": "boolean" },
+          "normalized_lead": { "$ref": "#/contracts/WF-04/output/properties/normalized_lead" },
+          "decision_id": { "type": "string", "format": "uuid" },
+          "requires_human_review": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["routing_complete", "side_effects_triggered"],
+        "properties": {
+          "routing_complete": { "type": "boolean" },
+          "side_effects_triggered": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["action_key", "action_type", "status"],
+              "properties": {
+                "action_key": { "type": "string", "description": "Unique idempotency key for the side effect" },
+                "action_type": { "type": "string", "enum": ["TELEGRAM_ALERT", "PROSPECT_EMAIL", "CRM_SYNC", "WEBHOOK_CALLBACK"] },
+                "status": { "type": "string", "enum": ["PENDING", "IN_PROGRESS", "SUCCEEDED", "SKIPPED"] },
+                "reason_code": { "type": "string", "pattern": "^S-\\d{3}$" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "blocked_actions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Actions that were blocked by consent or duplicate policy"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-11": {
+      "name": "Telegram Alert",
+      "description": "Sends internal notification to operator via Telegram Bot API for qualified leads and review items.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "action_key", "disposition"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "action_key": { "type": "string", "description": "Unique idempotency key for this alert" },
+          "disposition": { "type": "string" },
+          "lead_summary": { "type": "string", "maxLength": 500 },
+          "reason_codes": { "type": "array", "items": { "type": "string" } },
+          "requires_human_review": { "type": "boolean" },
+          "chat_id": { "type": "string", "description": "Target Telegram chat ID" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["action_key", "status", "reason_code"],
+        "properties": {
+          "action_key": { "type": "string" },
+          "status": { "type": "string", "enum": ["SUCCEEDED", "FAILED", "RETRY_PENDING"] },
+          "reason_code": { "type": "string", "pattern": "^S-\\d{3}$" },
+          "provider_reference": { "type": "string", "description": "Telegram message ID if sent" },
+          "error_classification": { "type": "string", "description": "Sanitized error if failed" },
+          "completed_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-12": {
+      "name": "Prospect Email",
+      "description": "Sends automated email to prospect if consent is given and disposition permits. Respects consent and idempotency policy.",
+      "input": {
+        "type": "object",
+        "required": ["lead_id", "action_key", "consent_to_contact", "email"],
+        "properties": {
+          "lead_id": { "type": "string", "format": "uuid" },
+          "action_key": { "type": "string", "description": "Unique idempotency key for this email" },
+          "consent_to_contact": { "type": "boolean" },
+          "email": { "type": "string", "format": "email" },
+          "full_name": { "type": "string" },
+          "disposition": { "type": "string" },
+          "email_template": { "type": "string", "description": "Template key for the email content" },
+          "email_variables": { "type": "object", "description": "Template variables" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["action_key", "status", "reason_code"],
+        "properties": {
+          "action_key": { "type": "string" },
+          "status": { "type": "string", "enum": ["SUCCEEDED", "FAILED", "SKIPPED", "RETRY_PENDING"] },
+          "reason_code": { "type": "string", "pattern": "^S-\\d{3}$" },
+          "skip_reason": { "type": "string", "enum": ["NO_CONSENT", "DUPLICATE", "BLOCKED_BY_POLICY", null] },
+          "provider_reference": { "type": "string", "description": "Email provider message ID if sent" },
+          "error_classification": { "type": "string" },
+          "completed_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-13": {
+      "name": "Human Review Resolution",
+      "description": "Accepts an authorized human resolution for an open review item. Validates the review token before accepting the resolution.",
+      "input": {
+        "type": "object",
+        "required": ["review_id", "review_token", "final_disposition", "reviewer_identifier"],
+        "properties": {
+          "review_id": { "type": "string", "format": "uuid" },
+          "review_token": { "type": "string", "description": "Time-limited review token (plaintext, hashed before storage)" },
+          "final_disposition": { "type": "string", "enum": ["QUALIFIED", "NURTURE", "DISQUALIFIED"] },
+          "reviewer_identifier": { "type": "string", "description": "Identity of the human reviewer" },
+          "reviewer_role": { "type": "string", "enum": ["OPERATOR", "ADMIN", "SALES"] },
+          "resolution_note": { "type": "string", "description": "Human reviewer's explanation" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["review_id", "status", "reason_code"],
+        "properties": {
+          "review_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["RESOLVED"] },
+          "reason_code": { "type": "string", "pattern": "^H-\\d{3}$", "description": "H-002 to H-004" },
+          "final_disposition": { "type": "string", "enum": ["QUALIFIED", "NURTURE", "DISQUALIFIED"] },
+          "previous_automated_recommendation": { "type": "string", "description": "Original automated recommendation" },
+          "reviewer_identifier": { "type": "string" },
+          "reviewer_role": { "type": "string" },
+          "resolution_note": { "type": "string" },
+          "resolved_at": { "type": "string", "format": "date-time" },
+          "override_recorded": { "type": "boolean", "description": "Whether this resolution overrides the automated recommendation" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-14": {
+      "name": "Error Handler",
+      "description": "Central operational error intake for unexpected workflow failures. Records failure context and alerts operator.",
+      "input": {
+        "type": "object",
+        "required": ["correlation_id", "error_type", "error_context"],
+        "properties": {
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "lead_id": { "type": "string", "format": "uuid" },
+          "error_type": { "type": "string", "enum": ["VALIDATION", "AI_API", "DB_CONNECTION", "TIMEOUT", "RATE_LIMIT", "UNEXPECTED"] },
+          "error_context": {
+            "type": "object",
+            "properties": {
+              "workflow": { "type": "string", "description": "Which workflow failed" },
+              "node": { "type": "string", "description": "Which node in the workflow" },
+              "error_message": { "type": "string", "description": "Sanitized error message" },
+              "error_classification": { "type": "string", "enum": ["TRANSIENT", "PERMANENT", "CONFIGURATION"] },
+              "retry_count": { "type": "integer" },
+              "max_retries": { "type": "integer" }
+            },
+            "additionalProperties": false
+          },
+          "processing_state": { "type": "string", "description": "State when error occurred" }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["event_id", "reason_code", "alert_sent"],
+        "properties": {
+          "event_id": { "type": "string", "format": "uuid", "description": "Processing event ID" },
+          "reason_code": { "type": "string", "pattern": "^E-\\d{3}$", "description": "System error code (E-001 to E-004)" },
+          "alert_sent": { "type": "boolean", "description": "Whether operator alert was sent" },
+          "recovery_action": { "type": "string", "enum": ["RETRY", "REVIEW", "DEAD_LETTER", "NOTIFY"], "description": "Recommended recovery action" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "WF-15": {
+      "name": "Evidence Generation",
+      "description": "Feeds synthetic fixtures through the test ingress, records expected vs observed outcomes, and exports machine-readable evidence.",
+      "input": {
+        "type": "object",
+        "required": ["fixture_id", "test_suite", "synthetic_lead"],
+        "properties": {
+          "fixture_id": { "type": "string", "description": "Unique fixture identifier" },
+          "test_suite": { "type": "string", "description": "Test suite name" },
+          "synthetic_lead": { "$ref": "../schemas/inbound-lead-v1.schema.json" },
+          "expected_disposition": { "type": "string", "enum": ["QUALIFIED", "NURTURE", "DISQUALIFIED", "HUMAN_REVIEW"] },
+          "expected_reason_codes": { "type": "array", "items": { "type": "string" } },
+          "expected_side_effects": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      },
+      "output": {
+        "type": "object",
+        "required": ["fixture_id", "test_passed", "observed_disposition"],
+        "properties": {
+          "fixture_id": { "type": "string" },
+          "test_passed": { "type": "boolean" },
+          "observed_disposition": { "type": "string" },
+          "observed_reason_codes": { "type": "array", "items": { "type": "string" } },
+          "expected_disposition": { "type": "string" },
+          "disposition_match": { "type": "boolean", "description": "Whether observed matches expected" },
+          "reason_codes_match": { "type": "boolean" },
+          "side_effects_match": { "type": "boolean" },
+          "discrepancies": { "type": "array", "items": { "type": "string" }, "description": "Human-readable discrepancy descriptions" },
+          "evidence_export_path": { "type": "string", "description": "Path to exported evidence artifact" },
+          "correlation_id": { "type": "string", "format": "uuid" },
+          "completed_at": { "type": "string", "format": "date-time" }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}
