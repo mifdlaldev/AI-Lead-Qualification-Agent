@@ -49,5 +49,6 @@ logs/
 
 # Temporary
 tmp/
-temp/.codegraph
+temp/
+.codegraph
 .omo/
