@@ -31,6 +31,7 @@ services:
       - DB_POSTGRESDB_USER=${PG_N8N_USER}
       - DB_POSTGRESDB_PASSWORD=${PG_N8N_PASSWORD}
       - DB_POSTGRESDB_SSL_ENABLED=${PG_N8N_SSL_MODE:-true}
+      - DB_POSTGRESDB_SSL_REJECT_UNAUTHORIZED=false
       # External service credentials (passed as n8n credential via env)
       - AI_PROVIDER=${AI_PROVIDER}
       - AI_API_KEY=${AI_API_KEY}
@@ -48,6 +49,8 @@ services:
       - PG_APP_SSL_MODE=${PG_APP_SSL_MODE:-require}
       - REVIEW_TOKEN_TTL_SECONDS=${REVIEW_TOKEN_TTL_SECONDS:-86400}
       - REVIEW_TOKEN_SECRET=${REVIEW_TOKEN_SECRET}
+    extra_hosts:
+      - "db.xiucfcbvwzfrmxpcnapb.supabase.co:54.255.219.82"
     volumes:
       - n8n_data:/home/node/.n8n
 
