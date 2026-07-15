@@ -6,25 +6,37 @@
         "httpMethod": "POST",
         "path": "deterministic-prequalification",
         "responseMode": "responseNode",
-        "options": { "rawBody": true }
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "23836f9c-4c5d-478a-a357-0f5a3292e154",
       "name": "Receive for Prequalification",
       "type": "n8n-nodes-base.webhook",
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
-            { "value1": "={{ $json.is_valid }}", "operation": "equals", "value2": true }
+            {
+              "value1": "={{ $json.is_valid }}",
+              "operation": "equals",
+              "value2": true
+            }
           ]
         }
       },
       "id": "668f7581-1890-4287-ac12-aa0128f75c6f",
       "name": "Is Lead Valid?",
       "type": "n8n-nodes-base.if",
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -34,8 +46,16 @@
       "id": "773924ad-9129-4e7f-83e5-a5067fdb1693",
       "name": "Ensure State PREQUALIFYING",
       "type": "n8n-nodes-base.postgres",
-      "position": [650, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        650,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -45,8 +65,16 @@
       "id": "d9dfd328-1d09-4153-9d40-026eafe45b2a",
       "name": "Log Event DEDUPLICATING→PREQUALIFYING",
       "type": "n8n-nodes-base.postgres",
-      "position": [850, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        850,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -56,8 +84,16 @@
       "id": "76efb63c-712e-4b78-8e2f-5c2715d3db3f",
       "name": "Load Excluded Services Policy",
       "type": "n8n-nodes-base.postgres",
-      "position": [1050, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1050,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -66,20 +102,30 @@
       "id": "82b021cf-4b7d-49dd-b3bf-ac1f5177fab4",
       "name": "Evaluate Prequalification Rules",
       "type": "n8n-nodes-base.code",
-      "position": [1250, 150]
+      "position": [
+        1250,
+        150
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
-            { "value1": "={{ $json.passed }}", "operation": "equals", "value2": true }
+            {
+              "value1": "={{ $json.passed }}",
+              "operation": "equals",
+              "value2": true
+            }
           ]
         }
       },
       "id": "e45beec8-b284-4050-a6da-0da844740794",
       "name": "Passed Prequalification?",
       "type": "n8n-nodes-base.if",
-      "position": [1450, 150]
+      "position": [
+        1450,
+        150
+      ]
     },
     {
       "parameters": {
@@ -89,8 +135,16 @@
       "id": "0cbd1965-dba4-494f-bf09-3072636c8ea9",
       "name": "Set State ANALYZING",
       "type": "n8n-nodes-base.postgres",
-      "position": [1650, 50],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1650,
+        50
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -100,26 +154,54 @@
       "id": "397e380e-b620-49b8-982d-22a3089b78ca",
       "name": "Log Event PREQUALIFYING→ANALYZING",
       "type": "n8n-nodes-base.postgres",
-      "position": [1850, 50],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1850,
+        50
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
         "values": {
           "string": [
-            { "name": "disposition_if_terminal", "value": "NONE" }
+            {
+              "name": "disposition_if_terminal",
+              "value": "NONE"
+            }
           ],
           "boolean": [
-            { "name": "passed", "value": true },
-            { "name": "requires_ai_analysis", "value": true }
+            {
+              "name": "passed",
+              "value": true
+            },
+            {
+              "name": "requires_ai_analysis",
+              "value": true
+            }
+          ],
+          "array": [
+            {
+              "name": "reason_codes",
+              "value": "={{ .reason_codes }}"
+            }
           ]
         },
-        "options": { "include": "none" }
+        "options": {
+          "include": "all"
+        }
       },
       "id": "c9d5e4f3-1b0a-4c7e-9f34-ab5678901234",
       "name": "Assemble Passed Output",
       "type": "n8n-nodes-base.set",
-      "position": [2050, 50]
+      "position": [
+        2050,
+        50
+      ]
     },
     {
       "parameters": {
@@ -129,8 +211,16 @@
       "id": "849bbe93-1784-4a23-9529-6aa523798948",
       "name": "Set State DECIDING (Terminal)",
       "type": "n8n-nodes-base.postgres",
-      "position": [1650, 300],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1650,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -140,44 +230,80 @@
       "id": "b1a228d8-155f-45e5-8c17-6d41d71065eb",
       "name": "Log Event PREQUALIFYING→DECIDING",
       "type": "n8n-nodes-base.postgres",
-      "position": [1850, 300],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1850,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
         "values": {
           "string": [
-            { "name": "disposition_if_terminal", "value": "={{ $json.disposition_if_terminal }}" }
+            {
+              "name": "disposition_if_terminal",
+              "value": "={{ $json.disposition_if_terminal }}"
+            }
           ],
           "boolean": [
-            { "name": "passed", "value": false },
-            { "name": "requires_ai_analysis", "value": false }
+            {
+              "name": "passed",
+              "value": false
+            },
+            {
+              "name": "requires_ai_analysis",
+              "value": false
+            }
           ]
         },
-        "options": { "include": "none" }
+        "options": {
+          "include": "all"
+        }
       },
       "id": "d0e6f5a4-2c1b-4d8f-0a45-bc6789012345",
       "name": "Assemble Disqualified Output",
       "type": "n8n-nodes-base.set",
-      "position": [2050, 300]
+      "position": [
+        2050,
+        300
+      ]
     },
     {
       "parameters": {
         "values": {
           "string": [
-            { "name": "disposition_if_terminal", "value": "NONE" }
+            {
+              "name": "disposition_if_terminal",
+              "value": "NONE"
+            }
           ],
           "boolean": [
-            { "name": "passed", "value": false },
-            { "name": "requires_ai_analysis", "value": false }
+            {
+              "name": "passed",
+              "value": false
+            },
+            {
+              "name": "requires_ai_analysis",
+              "value": false
+            }
           ]
         },
-        "options": { "include": "none" }
+        "options": {
+          "include": "all"
+        }
       },
       "id": "fcf3bf75-e31f-4bf4-93f2-468c26ed8b51",
       "name": "Skip - Lead Not Valid",
       "type": "n8n-nodes-base.set",
-      "position": [650, 450]
+      "position": [
+        650,
+        450
+      ]
     },
     {
       "parameters": {
@@ -187,60 +313,185 @@
       "id": "db42fd8c-4f14-41ce-8056-10988bcf8bd4",
       "name": "Return Prequalification Result",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [2250, 150]
+      "position": [
+        2250,
+        150
+      ]
     }
   ],
   "connections": {
     "Receive for Prequalification": {
-      "main": [[{ "node": "Is Lead Valid?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Is Lead Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Is Lead Valid?": {
       "main": [
-        [{ "node": "Ensure State PREQUALIFYING", "type": "main", "index": 0 }],
-        [{ "node": "Skip - Lead Not Valid", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Ensure State PREQUALIFYING",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip - Lead Not Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Ensure State PREQUALIFYING": {
-      "main": [[{ "node": "Log Event DEDUPLICATING→PREQUALIFYING", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Event DEDUPLICATING→PREQUALIFYING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Event DEDUPLICATING→PREQUALIFYING": {
-      "main": [[{ "node": "Load Excluded Services Policy", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Load Excluded Services Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Load Excluded Services Policy": {
-      "main": [[{ "node": "Evaluate Prequalification Rules", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Evaluate Prequalification Rules",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Evaluate Prequalification Rules": {
-      "main": [[{ "node": "Passed Prequalification?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Passed Prequalification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Passed Prequalification?": {
       "main": [
-        [{ "node": "Set State ANALYZING", "type": "main", "index": 0 }],
-        [{ "node": "Set State DECIDING (Terminal)", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Set State ANALYZING",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set State DECIDING (Terminal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Set State ANALYZING": {
-      "main": [[{ "node": "Log Event PREQUALIFYING→ANALYZING", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Event PREQUALIFYING→ANALYZING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Event PREQUALIFYING→ANALYZING": {
-      "main": [[{ "node": "Assemble Passed Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Assemble Passed Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Assemble Passed Output": {
-      "main": [[{ "node": "Return Prequalification Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Return Prequalification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Set State DECIDING (Terminal)": {
-      "main": [[{ "node": "Log Event PREQUALIFYING→DECIDING", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Event PREQUALIFYING→DECIDING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Event PREQUALIFYING→DECIDING": {
-      "main": [[{ "node": "Assemble Disqualified Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Assemble Disqualified Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Assemble Disqualified Output": {
-      "main": [[{ "node": "Return Prequalification Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Return Prequalification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Skip - Lead Not Valid": {
-      "main": [[{ "node": "Return Prequalification Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Return Prequalification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "versionId": "1.0.0",
   "staticData": null
 }

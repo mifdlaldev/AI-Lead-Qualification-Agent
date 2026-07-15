@@ -1,15 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/fixtures/expected-outcomes-v1",
-  "title": "Expected Outcomes Registry",
-  "description": "Frozen expected outcomes for synthetic evaluation fixtures. Each fixture maps to an expected disposition, reason codes, processing state, and side effects.",
+  "$id": "https://github.com/mifdlaldev/AI-Lead-Qualification-Agent/fixtures/synthetic-leads-v1",
+  "title": "Synthetic Lead Test Dataset",
+  "description": "Synthetic lead payloads for testing the ingress pipeline. Each lead maps to an acceptance criterion. All data is fictional and reproducible.",
   "version": 1,
-  "fixtures": [
+  "leads": [
     {
-      "fixture_id": "FIX-001",
+      "lead_id": "SYNTH-001",
       "ac_ref": "AC-01",
-      "description": "Valid in-scope SaaS automation inquiry — fully qualified lead with all required fields, clear service fit, and explicit budget",
-      "fixture_data": {
+      "description": "Valid in-scope SaaS automation inquiry — fully qualified lead",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0001",
         "submitted_at": "2026-07-15T08:30:00Z",
         "full_name": "Sarah Chen",
@@ -29,17 +29,17 @@
         "utm_medium": "cpc",
         "utm_campaign": "ai-automation-q3"
       },
-      "expected_disposition": "QUALIFIED",
-      "expected_reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-001"],
-      "expected_processing_state": "COMPLETED",
-      "expected_side_effects": ["TELEGRAM_ALERT", "PROSPECT_EMAIL"],
-      "notes": "Clearly qualified lead: valid contract, in-scope B2B SaaS automation, explicit budget in target range, consent granted, no ambiguity. All reason codes represent the full processing pipeline: validation passed, new submission, prequalification passed, AI analysis required and successful, qualified with all criteria met."
+      "expected": {
+        "disposition": "QUALIFIED",
+        "reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-001"],
+        "processing_state": "COMPLETED"
+      }
     },
     {
-      "fixture_id": "FIX-002",
+      "lead_id": "SYNTH-002",
       "ac_ref": "AC-02",
-      "description": "Missing required field (email) — submission omits a required field, must follow invalid/recovery path without AI inventing the value",
-      "fixture_data": {
+      "description": "Missing required field (email) — must follow invalid/recovery path",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0002",
         "submitted_at": "2026-07-15T09:00:00Z",
         "full_name": "Michael Torres",
@@ -55,17 +55,17 @@
         "service_interest": "Workflow Automation",
         "lead_source": "referral"
       },
-      "expected_disposition": "NONE",
-      "expected_reason_codes": ["V-001"],
-      "expected_processing_state": "INVALID",
-      "expected_side_effects": [],
-      "notes": "Missing required email field. AI must not be used to invent the email address. Validation must reject the submission with V-001 (MISSING_REQUIRED_FIELD) and route to the invalid/recovery path. No AI analysis should be invoked."
+      "expected": {
+        "disposition": "NONE",
+        "reason_codes": ["V-001"],
+        "processing_state": "INVALID"
+      }
     },
     {
-      "fixture_id": "FIX-003",
+      "lead_id": "SYNTH-003",
       "ac_ref": "AC-03",
-      "description": "Duplicate replay — exact same payload as FIX-001, must not duplicate prohibited side effects and must record duplicate outcome",
-      "fixture_data": {
+      "description": "Duplicate replay — exact same payload as SYNTH-001",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0001",
         "submitted_at": "2026-07-15T08:30:00Z",
         "full_name": "Sarah Chen",
@@ -85,17 +85,17 @@
         "utm_medium": "cpc",
         "utm_campaign": "ai-automation-q3"
       },
-      "expected_disposition": "QUALIFIED",
-      "expected_reason_codes": ["I-002", "D-001"],
-      "expected_processing_state": "DUPLICATE",
-      "expected_side_effects": [],
-      "notes": "Exact duplicate of FIX-001 (same submission_id and payload). Idempotency must detect the duplicate (I-002 EXACT_DUPLICATE), link to the original canonical record, and NOT re-trigger side effects (TELEGRAM_ALERT, PROSPECT_EMAIL). The duplicate outcome must be traceable."
+      "expected": {
+        "disposition": "QUALIFIED",
+        "reason_codes": ["I-002", "D-001"],
+        "processing_state": "DUPLICATE"
+      }
     },
     {
-      "fixture_id": "FIX-004",
+      "lead_id": "SYNTH-004",
       "ac_ref": "AC-04",
-      "description": "Clearly out-of-scope inquiry — wedding photography request, must be disqualified with exclusion reason recorded",
-      "fixture_data": {
+      "description": "Clearly out-of-scope — wedding photography, must be disqualified",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0004",
         "submitted_at": "2026-07-15T09:30:00Z",
         "full_name": "Marcus Webb",
@@ -112,17 +112,17 @@
         "service_interest": "Photography",
         "lead_source": "google_search"
       },
-      "expected_disposition": "DISQUALIFIED",
-      "expected_reason_codes": ["V-010", "I-001", "P-003", "D-004"],
-      "expected_processing_state": "COMPLETED",
-      "expected_side_effects": [],
-      "notes": "Clearly out-of-scope: wedding photography is unrelated to B2B SaaS AI automation. Prequalification must deterministically match the excluded-service list (P-003 EXCLUDED_SERVICE) and the decision must record D-004 (DISQUALIFIED_OUT_OF_SCOPE). No qualified-sales alert or prospect follow-up should be triggered."
+      "expected": {
+        "disposition": "DISQUALIFIED",
+        "reason_codes": ["V-010", "I-001", "P-003", "D-004"],
+        "processing_state": "COMPLETED"
+      }
     },
     {
-      "fixture_id": "FIX-005",
+      "lead_id": "SYNTH-005",
       "ac_ref": "AC-05",
-      "description": "Ambiguous high-potential inquiry — large budget but vague requirements, must route to HUMAN_REVIEW not forced into qualified/disqualified",
-      "fixture_data": {
+      "description": "Ambiguous high-potential — large budget, vague requirements, must route to HUMAN_REVIEW",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0005",
         "submitted_at": "2026-07-15T10:00:00Z",
         "full_name": "David Kim",
@@ -142,17 +142,17 @@
         "utm_medium": "organic",
         "utm_campaign": "thought-leadership"
       },
-      "expected_disposition": "HUMAN_REVIEW",
-      "expected_reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-006"],
-      "expected_processing_state": "AWAITING_HUMAN_REVIEW",
-      "expected_side_effects": [],
-      "notes": "High-potential (OVER_50K budget, Director-level contact) but critically ambiguous: no specific processes, tools, integration requirements, or measurable outcomes described. The AI analysis should detect the ambiguity and low confidence, triggering D-006 (HUMAN_REVIEW_AMBIGUITY). Must not be forced into QUALIFIED or DISQUALIFIED; must await human judgment."
+      "expected": {
+        "disposition": "HUMAN_REVIEW",
+        "reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-006"],
+        "processing_state": "AWAITING_HUMAN_REVIEW"
+      }
     },
     {
-      "fixture_id": "FIX-006",
+      "lead_id": "SYNTH-006",
       "ac_ref": "AC-06",
-      "description": "AI output malformed — simulates scenario where AI component returns output failing the required schema contract",
-      "fixture_data": {
+      "description": "AI output malformed — simulates AI returning invalid contract output",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0006",
         "submitted_at": "2026-07-15T10:30:00Z",
         "full_name": "James Rodriguez",
@@ -169,17 +169,17 @@
         "service_interest": "Workflow Automation",
         "lead_source": "conference"
       },
-      "expected_disposition": "HUMAN_REVIEW",
-      "expected_reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-002", "D-009"],
-      "expected_processing_state": "AWAITING_HUMAN_REVIEW",
-      "expected_side_effects": [],
-      "notes": "The lead data itself is valid and in-scope, but this fixture represents a runtime scenario where the AI component returns malformed output that fails schema validation (A-002 SCHEMA_VALIDATION_FAILED). The output must not be used as valid decision evidence. The system must follow the retry/review/failure path, routing to HUMAN_REVIEW (D-009 HUMAN_REVIEW_AI_FAILURE) rather than making an unsupported decision."
+      "expected": {
+        "disposition": "HUMAN_REVIEW",
+        "reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-002", "D-009"],
+        "processing_state": "AWAITING_HUMAN_REVIEW"
+      }
     },
     {
-      "fixture_id": "FIX-007",
+      "lead_id": "SYNTH-007",
       "ac_ref": "AC-07",
-      "description": "Prompt injection in project_description — lead text contains instructions to ignore policy, must not alter deterministic workflow behavior",
-      "fixture_data": {
+      "description": "Prompt injection in project_description — adversarial text must not alter policy",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0007",
         "submitted_at": "2026-07-15T11:00:00Z",
         "full_name": "Elena Vasquez",
@@ -196,17 +196,17 @@
         "service_interest": "HR Automation",
         "lead_source": "website"
       },
-      "expected_disposition": "HUMAN_REVIEW",
-      "expected_reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-008"],
-      "expected_processing_state": "AWAITING_HUMAN_REVIEW",
-      "expected_side_effects": [],
-      "notes": "Contains prompt-injection-style text in project_description: instructions to ignore policy, expose secrets, change recipients, and invoke privileged actions. The AI analysis should detect the adversarial content (risk flag), but the deterministic workflow policy must NOT be altered by these instructions. The lead must be routed to HUMAN_REVIEW with D-008 (HUMAN_REVIEW_PROMPT_INJECTION). The underlying valid inquiry (HR automation) should still be visible to the human reviewer."
+      "expected": {
+        "disposition": "HUMAN_REVIEW",
+        "reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-008"],
+        "processing_state": "AWAITING_HUMAN_REVIEW"
+      }
     },
     {
-      "fixture_id": "FIX-008",
+      "lead_id": "SYNTH-008",
       "ac_ref": "AC-08",
-      "description": "No consent for automated follow-up — qualified lead with consent_to_contact false, must not send automated prospect email",
-      "fixture_data": {
+      "description": "No consent for automated follow-up — qualified lead with consent_to_contact false",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0008",
         "submitted_at": "2026-07-15T11:30:00Z",
         "full_name": "Linda Park",
@@ -226,17 +226,17 @@
         "utm_medium": "referral",
         "utm_campaign": "devops-tools"
       },
-      "expected_disposition": "QUALIFIED",
-      "expected_reason_codes": ["V-010", "I-001", "P-001", "D-001", "S-005"],
-      "expected_processing_state": "COMPLETED",
-      "expected_side_effects": ["TELEGRAM_ALERT"],
-      "notes": "Otherwise qualified lead with consent_to_contact set to false. Prequalification must detect the missing consent (P-001 CONSENT_REQUIRED) but the lead can still be QUALIFIED on business merit. The automated prospect follow-up email must be skipped (S-005 EMAIL_SKIPPED_NO_CONSENT). Internal Telegram alert may still fire. No automated prospect communication must be sent."
+      "expected": {
+        "disposition": "QUALIFIED",
+        "reason_codes": ["V-010", "I-001", "P-001", "D-001", "S-005"],
+        "processing_state": "COMPLETED"
+      }
     },
     {
-      "fixture_id": "FIX-009",
+      "lead_id": "SYNTH-009",
       "ac_ref": "AC-09",
-      "description": "Human override — lead originally routed to HUMAN_REVIEW, resolved by authorized reviewer to QUALIFIED with distinguishable records",
-      "fixture_data": {
+      "description": "Human override — resolved from HUMAN_REVIEW to QUALIFIED by authorized reviewer",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0009",
         "submitted_at": "2026-07-15T12:00:00Z",
         "full_name": "Thomas Wright",
@@ -255,17 +255,17 @@
         "utm_source": "referral",
         "utm_medium": "partner"
       },
-      "expected_disposition": "QUALIFIED",
-      "expected_reason_codes": ["D-006", "H-001", "H-002", "D-001"],
-      "expected_processing_state": "COMPLETED",
-      "expected_side_effects": ["TELEGRAM_ALERT", "PROSPECT_EMAIL"],
-      "notes": "Lead was originally routed to HUMAN_REVIEW due to ambiguity (D-006 HUMAN_REVIEW_AMBIGUITY). A review task was created (H-001 REVIEW_CREATED). An authorized human reviewer resolved it to QUALIFIED (H-002 REVIEW_RESOLVED_QUALIFIED). The final human disposition (QUALIFIED), the prior automated recommendation (D-006), the reason code (H-002), and the timestamp must all remain distinguishable. Side effects fire after human resolution."
+      "expected": {
+        "disposition": "QUALIFIED",
+        "reason_codes": ["D-006", "H-001", "H-002", "D-001"],
+        "processing_state": "COMPLETED"
+      }
     },
     {
-      "fixture_id": "FIX-010",
+      "lead_id": "SYNTH-010",
       "ac_ref": "AC-10",
-      "description": "External dependency failure — AI API call fails beyond retry limit, must not be falsely marked successful",
-      "fixture_data": {
+      "description": "External dependency failure — AI API call fails beyond retry limit",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0010",
         "submitted_at": "2026-07-15T12:30:00Z",
         "full_name": "Robert Chen",
@@ -285,17 +285,17 @@
         "utm_medium": "booth",
         "utm_campaign": "dataeng-summit-2026"
       },
-      "expected_disposition": "NONE",
-      "expected_reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-003", "E-003"],
-      "expected_processing_state": "FAILED",
-      "expected_side_effects": [],
-      "notes": "Valid lead but the AI analysis API call fails (A-003 API_ERROR). After bounded retries are exhausted (E-003 RETRY_EXHAUSTED), processing must not be falsely marked COMPLETED. The processing state must be FAILED, and the disposition must remain NONE since no business decision was made. Operator visibility is required."
+      "expected": {
+        "disposition": "NONE",
+        "reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-003", "E-003"],
+        "processing_state": "FAILED"
+      }
     },
     {
-      "fixture_id": "FIX-011",
+      "lead_id": "SYNTH-011",
       "ac_ref": "AC-11",
-      "description": "Evidence reproducibility — clean qualified lead for the synthetic test dataset, used to verify metrics can be recomputed",
-      "fixture_data": {
+      "description": "Evidence reproducibility — clean qualified lead for synthetic test dataset",
+      "payload": {
         "submission_id": "sub-4a7b8c9d-0011",
         "submitted_at": "2026-07-15T13:00:00Z",
         "full_name": "Maria Santos",
@@ -315,11 +315,11 @@
         "utm_medium": "cpc",
         "utm_campaign": "logistics-automation"
       },
-      "expected_disposition": "QUALIFIED",
-      "expected_reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-001"],
-      "expected_processing_state": "COMPLETED",
-      "expected_side_effects": ["TELEGRAM_ALERT", "PROSPECT_EMAIL"],
-      "notes": "Clean qualified lead for the synthetic evaluation dataset. This fixture is part of the evidence reproducibility requirement (AC-11). All required fields present, clear in-scope B2B automation need, explicit budget, consent granted. The documented test procedure and synthetic dataset must allow portfolio metrics to be recomputed from recorded outputs."
+      "expected": {
+        "disposition": "QUALIFIED",
+        "reason_codes": ["V-010", "I-001", "P-004", "P-005", "A-001", "D-001"],
+        "processing_state": "COMPLETED"
+      }
     }
   ]
 }

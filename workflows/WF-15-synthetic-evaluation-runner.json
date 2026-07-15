@@ -333,48 +333,58 @@
     {
       "parameters": {
         "values": {
-          "string": [
-            {
-              "name": "run_id",
-              "value": "={{ $json.id || $('70 | Log Evaluation Event').first().json.id }}"
-            },
-            {
-              "name": "fixture_id",
-              "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_id }}"
-            },
-            {
-              "name": "run_version",
-              "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_version }}"
-            },
-            {
-              "name": "observed",
-              "value": "={{ JSON.stringify({ disposition: $('40 | Extract Observed Outputs').first().json.observed_disposition, reason_codes: JSON.parse($('40 | Extract Observed Outputs').first().json.observed_reason_codes || '[]'), processing_state: $('40 | Extract Observed Outputs').first().json.observed_processing_state }) }}"
-            },
-            {
-              "name": "expected",
-              "value": "={{ JSON.stringify({ disposition: $('10 | Parse Fixture Input').first().json.expected_disposition, reason_codes: JSON.parse($('10 | Parse Fixture Input').first().json.expected_reason_codes || '[]') }) }}"
-            },
-            {
-              "name": "match",
-              "value": "={{ $('50 | Compare Expected vs Observed').first().json.overall_match }}"
-            },
-            {
-              "name": "mismatches",
-              "value": "={{ $('50 | Compare Expected vs Observed').first().json.mismatches_json }}"
-            },
-            {
-              "name": "evidence",
-              "value": "={{ JSON.stringify({ decision_id: $('40 | Extract Observed Outputs').first().json.observed_decision_id, analysis_id: $('40 | Extract Observed Outputs').first().json.observed_analysis_id, processing_run_id: $('40 | Extract Observed Outputs').first().json.observed_processing_run_id, correlation_id: $('40 | Extract Observed Outputs').first().json.observed_correlation_id }) }}"
-            },
-            {
-              "name": "run_duration_ms",
-              "value": "={{ $('60 | Record End Time & Duration').first().json.run_duration_ms }}"
-            },
-            {
-              "name": "executed_at",
-              "value": "={{ $('60 | Record End Time & Duration').first().json.executed_at }}"
-            }
-          ]
+"string": [
+    {
+      "name": "run_id",
+      "value": "={{ $json.id || $('70 | Log Evaluation Event').first().json.id }}"
+    },
+    {
+      "name": "fixture_id",
+      "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_id }}"
+    },
+    {
+      "name": "run_version",
+      "value": "={{ $('10 | Parse Fixture Input').first().json.fixture_version }}"
+    },
+    {
+      "name": "observed_disposition",
+      "value": "={{ $('40 | Extract Observed Outputs').first().json.observed_disposition }}"
+    },
+    {
+      "name": "observed",
+      "value": "={{ JSON.stringify({ disposition: $('40 | Extract Observed Outputs').first().json.observed_disposition, reason_codes: JSON.parse($('40 | Extract Observed Outputs').first().json.observed_reason_codes || '[]'), processing_state: $('40 | Extract Observed Outputs').first().json.observed_processing_state }) }}"
+    },
+    {
+      "name": "expected",
+      "value": "={{ JSON.stringify({ disposition: $('10 | Parse Fixture Input').first().json.expected_disposition, reason_codes: JSON.parse($('10 | Parse Fixture Input').first().json.expected_reason_codes || '[]') }) }}"
+    },
+    {
+      "name": "match",
+      "value": "={{ $('50 | Compare Expected vs Observed').first().json.overall_match }}"
+    },
+    {
+      "name": "mismatches",
+      "value": "={{ $('50 | Compare Expected vs Observed').first().json.mismatches_json }}"
+    },
+    {
+      "name": "evidence",
+      "value": "={{ JSON.stringify({ decision_id: $('40 | Extract Observed Outputs').first().json.observed_decision_id, analysis_id: $('40 | Extract Observed Outputs').first().json.observed_analysis_id, processing_run_id: $('40 | Extract Observed Outputs').first().json.observed_processing_run_id, correlation_id: $('40 | Extract Observed Outputs').first().json.observed_correlation_id }) }}"
+    },
+    {
+      "name": "run_duration_ms",
+      "value": "={{ $('60 | Record End Time & Duration').first().json.run_duration_ms }}"
+    },
+    {
+      "name": "executed_at",
+      "value": "={{ $('60 | Record End Time & Duration').first().json.executed_at }}"
+    }
+  ],
+  "boolean": [
+    {
+      "name": "test_passed",
+      "value": "={{ $('50 | Compare Expected vs Observed').first().json.overall_match === 'true' }}"
+    }
+  ]
         },
         "options": {}
       },

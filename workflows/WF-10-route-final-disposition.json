@@ -437,7 +437,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.correlation_id }}',\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  'DECIDING',\n  'COMPLETED',\n  'STATE_TRANSITION',\n  'SYSTEM',\n  'ROUTING_DISQUALIFIED',\n  '{\"disposition\":\"DISQUALIFIED\",\"decision_id\":\"{{ $('Prep Routing Data').item.json.decision_id }}\"}'::jsonb\n)\nRETURNING id"
+        "query": "INSERT INTO processing_events (correlation_id, lead_id, previous_state, new_state, event_type, actor_type, reason_code, safe_metadata)\nVALUES (\n  '{{ $('Prep Routing Data').item.json.correlation_id }}',\n  '{{ $('Prep Routing Data').item.json.lead_id }}'::uuid,\n  'ROUTING',\n  'COMPLETED',\n  'STATE_TRANSITION',\n  'SYSTEM',\n  'ROUTING_DISQUALIFIED',\n  '{\"disposition\":\"DISQUALIFIED\",\"decision_id\":\"{{ $('Prep Routing Data').item.json.decision_id }}\"}'::jsonb\n)\nRETURNING id"
       },
       "id": "e10a0033-0000-4000-a000-000000000033",
       "name": "Log DISQUALIFIED Event",

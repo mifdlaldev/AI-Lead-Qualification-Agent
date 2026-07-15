@@ -6,12 +6,17 @@
         "httpMethod": "POST",
         "path": "validate-normalize-lead",
         "responseMode": "responseNode",
-        "options": { "rawBody": true }
+        "options": {
+          "rawBody": true
+        }
       },
       "id": "4092f579-dcab-4af1-8a3e-74bad2922edc",
       "name": "Receive Lead for Validation",
       "type": "n8n-nodes-base.webhook",
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -20,20 +25,30 @@
       "id": "8e4cf7c2-e4f5-4b4c-ab03-74f54ec0a28d",
       "name": "Validate & Build Reason Codes",
       "type": "n8n-nodes-base.code",
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
         "conditions": {
           "boolean": [
-            { "value1": "={{ $json.is_valid }}", "operation": "equals", "value2": true }
+            {
+              "value1": "={{ $json.is_valid }}",
+              "operation": "equals",
+              "value2": true
+            }
           ]
         }
       },
       "id": "2dc092e4-bbc3-4c97-bfce-3a20c53765c3",
       "name": "Is Valid?",
       "type": "n8n-nodes-base.if",
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,8 +58,16 @@
       "id": "618f7182-6e5f-4dd2-a3db-6dfc89b79f73",
       "name": "Set State VALIDATING",
       "type": "n8n-nodes-base.postgres",
-      "position": [850, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        850,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -54,8 +77,16 @@
       "id": "43a768de-aaef-4863-99b1-fad167b77f07",
       "name": "Log Event RECEIVED→VALIDATING",
       "type": "n8n-nodes-base.postgres",
-      "position": [1050, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1050,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -65,8 +96,16 @@
       "id": "77b96155-234c-448f-af5f-8004b0501140",
       "name": "Set State DEDUPLICATING",
       "type": "n8n-nodes-base.postgres",
-      "position": [1250, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1250,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -76,21 +115,56 @@
       "id": "92c5b1ca-8b35-4ccb-8faa-81c0ac153068",
       "name": "Log Event VALIDATING→DEDUPLICATING",
       "type": "n8n-nodes-base.postgres",
-      "position": [1450, 150],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1450,
+        150
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
         "values": {
-          "string": [{ "name": "recoverability", "value": "VALID" }],
-          "boolean": [{ "name": "is_valid", "value": true }]
+          "string": [
+            {
+              "name": "recoverability",
+              "value": "VALID"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "is_valid",
+              "value": true
+            }
+          ],
+          "array": [
+            {
+              "name": "reason_codes",
+              "value": "={{ .reason_codes }}"
+            }
+          ],
+          "object": [
+            {
+              "name": "normalized_lead",
+              "value": "={{ .normalized_lead }}"
+            }
+          ]
         },
-        "options": { "include": "none" }
+        "options": {
+          "include": "all"
+        }
       },
       "id": "983a22b1-5c7d-4e3f-9a12-cd456ef78901",
       "name": "Build Valid Output",
       "type": "n8n-nodes-base.set",
-      "position": [1650, 150]
+      "position": [
+        1650,
+        150
+      ]
     },
     {
       "parameters": {
@@ -100,8 +174,16 @@
       "id": "b28c7f32-d8e8-47d6-8477-d6f8c17bd589",
       "name": "Set State INVALID",
       "type": "n8n-nodes-base.postgres",
-      "position": [850, 450],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        850,
+        450
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
@@ -111,21 +193,44 @@
       "id": "2d5eb9e8-af52-4ccc-ad55-1bc251486504",
       "name": "Log Event VALIDATING→INVALID",
       "type": "n8n-nodes-base.postgres",
-      "position": [1050, 450],
-      "credentials": { "postgres": { "id": null, "name": "Postgres" } }
+      "position": [
+        1050,
+        450
+      ],
+      "credentials": {
+        "postgres": {
+          "id": null,
+          "name": "Postgres"
+        }
+      }
     },
     {
       "parameters": {
         "values": {
-          "string": [{ "name": "recoverability", "value": "={{ $json.recoverability }}" }],
-          "boolean": [{ "name": "is_valid", "value": false }]
+          "string": [
+            {
+              "name": "recoverability",
+              "value": "={{ $json.recoverability }}"
+            }
+          ],
+          "boolean": [
+            {
+              "name": "is_valid",
+              "value": false
+            }
+          ]
         },
-        "options": { "include": "none" }
+        "options": {
+          "include": "all"
+        }
       },
       "id": "501c7b3e-8c8c-4537-8de9-f719ed15826c",
       "name": "Build Invalid Output",
       "type": "n8n-nodes-base.set",
-      "position": [1250, 450]
+      "position": [
+        1250,
+        450
+      ]
     },
     {
       "parameters": {
@@ -135,48 +240,145 @@
       "id": "0a7ede32-2433-46ab-8344-b01327b250f4",
       "name": "Return Validation Result",
       "type": "n8n-nodes-base.respondToWebhook",
-      "position": [1850, 300]
+      "position": [
+        1850,
+        300
+      ]
     }
   ],
   "connections": {
     "Receive Lead for Validation": {
-      "main": [[{ "node": "Validate & Build Reason Codes", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Validate & Build Reason Codes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validate & Build Reason Codes": {
-      "main": [[{ "node": "Is Valid?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Is Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Is Valid?": {
       "main": [
-        [{ "node": "Set State VALIDATING", "type": "main", "index": 0 }],
-        [{ "node": "Set State INVALID", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Set State VALIDATING",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set State INVALID",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Set State VALIDATING": {
-      "main": [[{ "node": "Log Event RECEIVED→VALIDATING", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Event RECEIVED→VALIDATING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Event RECEIVED→VALIDATING": {
-      "main": [[{ "node": "Set State DEDUPLICATING", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Set State DEDUPLICATING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Set State DEDUPLICATING": {
-      "main": [[{ "node": "Log Event VALIDATING→DEDUPLICATING", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Event VALIDATING→DEDUPLICATING",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Event VALIDATING→DEDUPLICATING": {
-      "main": [[{ "node": "Build Valid Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Valid Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build Valid Output": {
-      "main": [[{ "node": "Return Validation Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Return Validation Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Set State INVALID": {
-      "main": [[{ "node": "Log Event VALIDATING→INVALID", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Event VALIDATING→INVALID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Event VALIDATING→INVALID": {
-      "main": [[{ "node": "Build Invalid Output", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Invalid Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Build Invalid Output": {
-      "main": [[{ "node": "Return Validation Result", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Return Validation Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "versionId": "1.0.0",
   "staticData": null
 }
