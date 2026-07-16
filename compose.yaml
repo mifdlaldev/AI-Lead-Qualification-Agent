@@ -50,7 +50,7 @@ services:
       - REVIEW_TOKEN_TTL_SECONDS=${REVIEW_TOKEN_TTL_SECONDS:-86400}
       - REVIEW_TOKEN_SECRET=${REVIEW_TOKEN_SECRET}
     extra_hosts:
-      - "db.xiucfcbvwzfrmxpcnapb.supabase.co:54.255.219.82"
+      - "aws-0-ap-southeast-1.pooler.supabase.com:52.74.252.201"
     volumes:
       - n8n_data:/home/node/.n8n
 
